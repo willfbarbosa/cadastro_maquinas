@@ -31,6 +31,19 @@ app.use(async (req, res, next) => {
   next();
 });
 
+// Rota de Diagnóstico do Banco de Dados
+app.get('/api/db-status', (req, res) => {
+  const tursoUrl = process.env.TURSO_DATABASE_URL;
+  res.json({
+    success: true,
+    tursoConnected: !!tursoUrl,
+    mode: tursoUrl ? 'TURSO_CLOUD' : 'SQLITE_LOCAL',
+    message: tursoUrl
+      ? 'Conectado com sucesso ao Turso Cloud DB!'
+      : 'ATENÇÃO: Variável TURSO_DATABASE_URL ausente no Vercel. Rodando em SQLite local (Read-Only no Vercel).'
+  });
+});
+
 // Servir arquivos estáticos do frontend (HTML, CSS, JS, Img)
 app.use(express.static(path.join(__dirname)));
 
