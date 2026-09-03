@@ -193,7 +193,7 @@ const App = {
     if (stored) {
       this.equipments = JSON.parse(stored);
     } else {
-      this.equipments = [...MOCK_EQUIPMENTS];
+      this.equipments = [];
       this.saveEquipmentsLocal();
     }
     this.filteredEquipments = [...this.equipments];
@@ -220,7 +220,7 @@ const App = {
     if (stored) {
       this.cashbookEntries = JSON.parse(stored);
     } else {
-      this.cashbookEntries = [...MOCK_CASHBOOK];
+      this.cashbookEntries = [];
       this.saveCashbookLocal();
     }
     this.filteredCashbook = [...this.cashbookEntries];
@@ -247,7 +247,7 @@ const App = {
     if (stored) {
       this.stockItems = JSON.parse(stored);
     } else {
-      this.stockItems = [...MOCK_STOCK];
+      this.stockItems = [];
       this.saveStockLocal();
     }
     this.filteredStock = [...this.stockItems];
@@ -274,7 +274,7 @@ const App = {
     if (stored) {
       this.serviceOrders = JSON.parse(stored);
     } else {
-      this.serviceOrders = typeof MOCK_SERVICE_ORDERS !== 'undefined' ? [...MOCK_SERVICE_ORDERS] : [];
+      this.serviceOrders = [];
       this.saveServiceOrdersLocal();
     }
     this.filteredOrders = [...this.serviceOrders];
@@ -1657,20 +1657,22 @@ const App = {
   },
 
   async loadSampleData() {
-    if (confirm('Deseja recarregar a lista com os dados de exemplo de demonstração? Os dados atuais serão substituídos.')) {
-      this.equipments = [...MOCK_EQUIPMENTS];
-      this.cashbookEntries = [...MOCK_CASHBOOK];
-      this.stockItems = [...MOCK_STOCK];
+    if (confirm('Deseja limpar todos os dados em memória local?')) {
+      this.equipments = [];
+      this.cashbookEntries = [];
+      this.stockItems = [];
+      this.serviceOrders = [];
 
       this.saveEquipmentsLocal();
       this.saveCashbookLocal();
       this.saveStockLocal();
+      this.saveServiceOrdersLocal();
 
       this.renderAll();
       if (this.activeTab === 'stock') this.renderStockAll();
       if (this.activeTab === 'cashbook') this.renderCashbookAll();
 
-      this.showToast('Dados de demonstração carregados!', 'success');
+      this.showToast('Dados locais limpos com sucesso!', 'info');
     }
   },
 
