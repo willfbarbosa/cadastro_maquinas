@@ -516,6 +516,11 @@ app.delete('/api/logs', async (req, res) => {
   }
 });
 
+// Rota coringa para servir o index.html em qualquer navegação do frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 function startServer(portToUse) {
   const server = app.listen(portToUse, () => {
     console.log(`🚀 Servidor Eletro Zone Backend (SQLite) rodando na porta ${portToUse}`);
