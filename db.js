@@ -1,44 +1,81 @@
 /**
- * MÓDULO DE BANCO DE DADOS SQLITE (ELETRO ZONE)
+ * MÓDULO DE BANCO DE DADOS SQLITE / TURSO CLOUD (ELETRO ZONE)
  * Inicialização do banco relacional, criação de tabelas e auto-seeding de dados.
+ * Suporta Turso Cloud (libsql://) via variáveis de ambiente e SQLite local (database.sqlite).
  */
 
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'database.sqlite');
-const db = new sqlite3.Database(DB_PATH);
+const TURSO_URL = process.env.TURSO_DATABASE_URL;
+const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
-// Wrappers com Promises para faciliar async/await
-const dbRun = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
+let tursoClient = null;
+let sqliteDb = null;
+
+if (TURSO_URL) {
+  console.log('☁️ Conectando ao Banco de Dados Turso Cloud (LibSQL):', TURSO_URL);
+  const { createClient } = require('@libsql/client');
+  tursoClient = createClient({
+    url: TURSO_URL,
+    authToken: TURSO_AUTH_TOKEN || ''
   });
+} else {
+  const DB_PATH = path.join(__dirname, 'database.sqlite');
+  console.log('🗄️ Conectando ao Banco de Dados SQLite Local:', DB_PATH);
+  const sqlite3 = require('sqlite3').verbose();
+  sqliteDb = new sqlite3.Database(DB_PATH);
+}
+
+// Wrappers assíncronos compatíveis com Turso Cloud e SQLite Local
+const dbRun = async (sql, params = []) => {
+  if (tursoClient) {
+    return await tursoClient.execute({ sql, args: params });
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.run(sql, params, function (err) {
+        if (err) reject(err);
+        else resolve(this);
+      });
+    });
+  }
 };
 
-const dbAll = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
+const dbAll = async (sql, params = []) => {
+  if (tursoClient) {
+    const res = await tursoClient.execute({ sql, args: params });
+    return res.rows.map(row => (typeof row === 'object' && row !== null ? { ...row } : row));
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
     });
-  });
+  }
 };
 
-const dbGet = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
+const dbGet = async (sql, params = []) => {
+  if (tursoClient) {
+    const res = await tursoClient.execute({ sql, args: params });
+    if (!res.rows || res.rows.length === 0) return null;
+    const first = res.rows[0];
+    return typeof first === 'object' && first !== null ? { ...first } : first;
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.get(sql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
     });
-  });
+  }
 };
 
 async function initDatabase() {
-  console.log('🗄️ Inicializando Banco de Dados SQLite:', DB_PATH);
+  if (TURSO_URL) {
+    console.log('⚡ Inicializando esquema no Turso Cloud...');
+  } else {
+    console.log('🗄️ Inicializando esquema no SQLite Local...');
+  }
 
   // 1. Tabela de Usuários e Permissões
   await dbRun(`
@@ -169,6 +206,23 @@ async function initDatabase() {
 }
 
 async function seedInitialData() {
+  // Verificação e População do Usuário Administrador Mestre Padrão
+  const adminUser = await dbGet('SELECT * FROM users WHERE LOWER(username) = ?', ['willian.barbosa']);
+  const adminPermissions = JSON.stringify({ canCreate: true, canEdit: true, canDelete: true, isAdmin: true });
+  if (!adminUser) {
+    console.log('👤 Criando usuário Administrador Mestre (willian.barbosa) no SQLite...');
+    await dbRun(
+      `INSERT INTO users (id, username, fullname, password, role, permissions, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['usr_admin_willian', 'willian.barbosa', 'Willian Barbosa', 'Fx8350.8gb2017', 'ADMIN', adminPermissions, new Date().toISOString()]
+    );
+  } else {
+    await dbRun(
+      `UPDATE users SET fullname = ?, password = ?, role = 'ADMIN', permissions = ? WHERE LOWER(username) = ?`,
+      ['Willian Barbosa', 'Fx8350.8gb2017', adminPermissions, 'willian.barbosa']
+    );
+  }
+
   // Verificação e População Inicial de Equipamentos
   const countEq = await dbGet('SELECT COUNT(*) as count FROM equipments');
   if (countEq.count === 0) {
@@ -403,7 +457,7 @@ async function seedInitialData() {
 }
 
 module.exports = {
-  db,
+  db: sqliteDb,
   dbRun,
   dbAll,
   dbGet,

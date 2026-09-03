@@ -14,6 +14,23 @@ let PORT = process.env.PORT || 8080;
 app.use(cors());
 app.use(express.json());
 
+let isDbInitialized = false;
+let dbInitPromise = null;
+
+app.use(async (req, res, next) => {
+  if (req.path.startsWith('/api/') && !isDbInitialized) {
+    if (!dbInitPromise) {
+      dbInitPromise = initDatabase().then(() => {
+        isDbInitialized = true;
+      }).catch(err => {
+        console.error('❌ Erro na inicialização do DB:', err);
+      });
+    }
+    await dbInitPromise;
+  }
+  next();
+});
+
 // Servir arquivos estáticos do frontend (HTML, CSS, JS, Img)
 app.use(express.static(path.join(__dirname)));
 
@@ -516,8 +533,12 @@ function startServer(portToUse) {
 }
 
 // Inicialização do Banco de Dados e Servidor Express
-initDatabase().then(() => {
-  startServer(PORT);
-}).catch(err => {
-  console.error('❌ Erro fatal ao iniciar banco de dados:', err);
-});
+if (require.main === module) {
+  initDatabase().then(() => {
+    startServer(PORT);
+  }).catch(err => {
+    console.error('❌ Erro fatal ao iniciar banco de dados:', err);
+  });
+}
+
+module.exports = app;

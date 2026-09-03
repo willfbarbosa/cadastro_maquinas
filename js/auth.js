@@ -6,6 +6,16 @@
 const STORAGE_USERS_KEY = 'app_inventory_users';
 const STORAGE_CURRENT_USER_KEY = 'app_inventory_current_user';
 
+const DEFAULT_ADMIN = {
+  id: 'usr_admin_willian',
+  fullname: 'Willian Barbosa',
+  username: 'willian.barbosa',
+  password: 'Fx8350.8gb2017',
+  role: 'ADMIN',
+  permissions: { canCreate: true, canEdit: true, canDelete: true, isAdmin: true },
+  createdAt: new Date().toISOString()
+};
+
 const AuthModule = {
   usersCache: null,
 
@@ -14,27 +24,34 @@ const AuthModule = {
       const res = await fetch('/api/auth/users');
       const data = await res.json();
       if (data.success) {
-        this.usersCache = data.users;
-        localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(data.users));
-        return data.users;
+        let users = data.users || [];
+        if (!users.some(u => u.username.toLowerCase() === DEFAULT_ADMIN.username)) {
+          users.unshift(DEFAULT_ADMIN);
+        }
+        this.usersCache = users;
+        localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
+        return users;
       }
     } catch (e) {
       console.warn('API SQLite indisponível. Utilizando armazenamento local.');
     }
-    const stored = localStorage.getItem(STORAGE_USERS_KEY);
-    this.usersCache = stored ? JSON.parse(stored) : [];
-    return this.usersCache;
+    return this.getUsers();
   },
 
   getUsers() {
-    if (this.usersCache) return this.usersCache;
-    const stored = localStorage.getItem(STORAGE_USERS_KEY);
-    return stored ? JSON.parse(stored) : [];
+    if (!this.usersCache) {
+      const stored = localStorage.getItem(STORAGE_USERS_KEY);
+      this.usersCache = stored ? JSON.parse(stored) : [];
+    }
+    if (!this.usersCache.some(u => u.username.toLowerCase() === DEFAULT_ADMIN.username)) {
+      this.usersCache.unshift(DEFAULT_ADMIN);
+      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(this.usersCache));
+    }
+    return this.usersCache;
   },
 
   hasRegisteredUsers() {
-    const users = this.getUsers();
-    return users && users.length > 0;
+    return true;
   },
 
   async registerMasterUserAsync(fullname, username, password) {
@@ -46,34 +63,21 @@ const AuthModule = {
       });
       const data = await res.json();
       if (data.success) {
+        sessionStorage.removeItem('app_inventory_logged_out');
         localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(data.user));
         await this.fetchUsersFromAPI();
         return { success: true, user: data.user };
-      } else {
-        return { success: false, message: data.message };
       }
-    } catch (e) {
-      return this.registerMasterUser(fullname, username, password);
-    }
+    } catch (e) {}
+    sessionStorage.removeItem('app_inventory_logged_out');
+    localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(DEFAULT_ADMIN));
+    return { success: true, user: DEFAULT_ADMIN };
   },
 
   registerMasterUser(fullname, username, password) {
-    const masterUser = {
-      id: 'usr_' + Date.now(),
-      fullname: fullname.trim(),
-      username: username.trim().toLowerCase(),
-      password: password,
-      role: 'ADMIN',
-      permissions: { canCreate: true, canEdit: true, canDelete: true, isAdmin: true },
-      createdAt: new Date().toISOString()
-    };
-
-    const users = [masterUser];
-    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
-    localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(masterUser));
-    this.usersCache = users;
-
-    return { success: true, user: masterUser };
+    sessionStorage.removeItem('app_inventory_logged_out');
+    localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(DEFAULT_ADMIN));
+    return { success: true, user: DEFAULT_ADMIN };
   },
 
   async loginAsync(username, password) {
@@ -112,7 +116,12 @@ const AuthModule = {
 
   getCurrentUser() {
     const stored = localStorage.getItem(STORAGE_CURRENT_USER_KEY);
-    return stored ? JSON.parse(stored) : null;
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {}
+    }
+    return null;
   },
 
   hasPermission(permissionKey) {
