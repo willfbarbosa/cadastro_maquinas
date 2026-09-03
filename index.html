@@ -159,6 +159,12 @@
               </svg>
               Livro Caixa
             </button>
+            <button id="tab-btn-orders" class="nav-tab-btn" onclick="App.switchTab('orders')">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              OS & Orçamentos
+            </button>
           </div>
 
           <div class="user-nav-profile">
@@ -564,6 +570,131 @@
                   </tr>
                 </thead>
                 <tbody id="cashbook-table-body">
+                  <!-- Renderizado dinamicamente via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================================
+             ABA 4: ORDENS DE SERVIÇO E ORÇAMENTOS
+             ==================================================================== -->
+        <div id="orders-tab-section" style="display: none;">
+          <!-- CARDS DE METRICAS DE OS -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-icon" style="background: rgba(139, 92, 246, 0.15); color: #a78bfa;">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">Total Registrados</span>
+                <span id="metric-orders-total" class="metric-value">0</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">Aguardando Aprovação</span>
+                <span id="metric-orders-pending" class="metric-value">0</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon" style="background: rgba(6, 182, 212, 0.15); color: #22d3ee;">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">OS em Andamento</span>
+                <span id="metric-orders-progress" class="metric-value">0</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">Faturamento Concluído</span>
+                <span id="metric-orders-revenue" class="metric-value">R$ 0,00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- BARRA DE AÇÕES E PESQUISA -->
+          <div class="inventory-actions-bar">
+            <div class="search-filter-group">
+              <div class="search-box">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <input type="text" id="order-search-input" placeholder="Pesquisar por Código, Cliente, Equipamento ou Técnico...">
+              </div>
+
+              <select id="order-filter-type" class="filter-select">
+                <option value="">Todos os Tipos</option>
+                <option value="ORCAMENTO">Apenas Orçamentos</option>
+                <option value="ORDEM_SERVICO">Apenas Ordens de Serviço</option>
+              </select>
+
+              <select id="order-filter-status" class="filter-select">
+                <option value="">Todos os Status</option>
+                <option value="AGUARDANDO_APROVACAO">Aguardando Aprovação</option>
+                <option value="APROVADO">Aprovado</option>
+                <option value="EM_ANDAMENTO">Em Andamento</option>
+                <option value="CONCLUIDO">Concluído</option>
+                <option value="CANCELADO">Cancelado</option>
+              </select>
+            </div>
+
+            <div class="action-buttons">
+              <button class="btn btn-secondary" onclick="App.exportOrdersCSV()">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Exportar CSV
+              </button>
+              <button id="btn-add-order" class="btn btn-primary" onclick="App.openServiceOrderModal()">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M12 4v16m8-8H4"></path>
+                </svg>
+                Nova OS / Orçamento
+              </button>
+            </div>
+          </div>
+
+          <!-- TABELA DE ORDENS DE SERVIÇO E ORÇAMENTOS -->
+          <div class="card-table-wrapper">
+            <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="font-family: var(--font-heading); font-size: 1.05rem; font-weight: 600;">Ordens de Serviço e Orçamentos Emitidos</h3>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>CÓDIGO</th>
+                    <th>TIPO</th>
+                    <th>CLIENTE / CONTATO</th>
+                    <th>EQUIPAMENTO / APARELHO</th>
+                    <th>TÉCNICO</th>
+                    <th>VALOR TOTAL (R$)</th>
+                    <th>STATUS</th>
+                    <th style="text-align: right;">AÇÕES</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-table-body">
                   <!-- Renderizado dinamicamente via JS -->
                 </tbody>
               </table>
@@ -1175,6 +1306,143 @@
           <button class="btn btn-secondary btn-sm" onclick="App.exportLogsCSV()">Exportar Logs CSV</button>
           <button class="btn btn-secondary" onclick="App.closeLogsModal()">Fechar</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CADASTRO / EDIÇÃO DE ORDEM DE SERVIÇO OU ORÇAMENTO -->
+  <div id="service-order-modal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 780px;">
+      <div class="modal-header">
+        <h3 id="order-modal-title" class="modal-title">Nova Ordem de Serviço / Orçamento</h3>
+        <button class="modal-close-btn" onclick="App.closeServiceOrderModal()">&times;</button>
+      </div>
+
+      <form id="service-order-form">
+        <input type="hidden" id="order-field-id">
+        <div class="modal-body">
+          <div class="form-grid">
+            
+            <div class="form-group">
+              <label class="form-label" for="order-field-type">Tipo de Documento *</label>
+              <select id="order-field-type" class="form-control" required onchange="App.handleOrderTypeChange()">
+                <option value="ORCAMENTO">ORÇAMENTO TÉCNICO</option>
+                <option value="ORDEM_SERVICO">ORDEM DE SERVIÇO (OS)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-status">Status Inicial *</label>
+              <select id="order-field-status" class="form-control" required>
+                <option value="AGUARDANDO_APROVACAO">Aguardando Aprovação</option>
+                <option value="APROVADO">Aprovado</option>
+                <option value="EM_ANDAMENTO">Em Andamento</option>
+                <option value="CONCLUIDO">Concluído</option>
+                <option value="CANCELADO">Cancelado</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-client-name">Nome do Cliente / Empresa *</label>
+              <input type="text" id="order-field-client-name" class="form-control" placeholder="ex: Alfa Soluções ou João da Silva" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-client-contact">Telefone / E-mail / Contato</label>
+              <input type="text" id="order-field-client-contact" class="form-control" placeholder="ex: (11) 99999-8888 ou contato@email.com">
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="order-field-select-equipment">Vincular a um Equipamento Cadastrado (Opcional)</label>
+              <select id="order-field-select-equipment" class="form-control" onchange="App.onSelectOrderEquipmentChange()">
+                <option value="">-- Aparelho / Equipamento Avulso (Não cadastrado) --</option>
+                <!-- Opções alimentadas via JS -->
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="order-field-equipment-desc">Descrição do Equipamento / Marca / Modelo *</label>
+              <input type="text" id="order-field-equipment-desc" class="form-control" placeholder="ex: Notebook Dell Vostro 5471 N/S: 89123" required>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="order-field-problem">Defeito Relatado / Solicitação do Cliente *</label>
+              <textarea id="order-field-problem" class="form-control" rows="2" placeholder="Descreva os sintomas, barulhos, falhas ou solicitação do cliente..." required></textarea>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="order-field-diagnosis">Laudo Técnico / Diagnóstico & Solução Recomendada</label>
+              <textarea id="order-field-diagnosis" class="form-control" rows="2" placeholder="Descrição da avaliação técnica, peças necessárias ou procedimentos..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-services-cost">Valor Mão de Obra / Serviços (R$)</label>
+              <input type="number" step="0.01" min="0" id="order-field-services-cost" class="form-control" placeholder="0.00" oninput="App.calculateOrderTotal()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-parts-cost">Valor Peças / Componentes (R$)</label>
+              <input type="number" step="0.01" min="0" id="order-field-parts-cost" class="form-control" placeholder="0.00" oninput="App.calculateOrderTotal()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Valor Total Calculado (R$)</label>
+              <input type="text" id="order-field-total-cost-display" class="form-control" style="font-weight: 700; color: #10b981;" value="R$ 0,00" readonly>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-payment-method">Forma de Pagamento</label>
+              <select id="order-field-payment-method" class="form-control">
+                <option value="PIX">PIX</option>
+                <option value="DINHEIRO">Dinheiro</option>
+                <option value="CARTAO_CREDITO">Cartão de Crédito</option>
+                <option value="CARTAO_DEBITO">Cartão de Débito</option>
+                <option value="BOLETO">Boleto Bancário</option>
+                <option value="FATURADO">Faturado 30 Dias</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-technician">Técnico Responsável</label>
+              <input type="text" id="order-field-technician" class="form-control" placeholder="Nome do técnico">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="order-field-validity">Data de Validade (para Orçamentos)</label>
+              <input type="date" id="order-field-validity" class="form-control">
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeServiceOrderModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Documento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: VISUALIZADOR DE IMPRESSÃO / PDF DE OS E ORÇAMENTO -->
+  <div id="print-order-modal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 860px; background: transparent; border: none; box-shadow: none;">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;" class="no-print">
+        <h3 class="modal-title" style="color: white;">Pré-visualização do Documento para Impressão</h3>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-primary" onclick="window.print()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+            </svg>
+            Imprimir / Salvar PDF
+          </button>
+          <button class="btn btn-secondary" onclick="App.closePrintOrderModal()">&times; Fechar</button>
+        </div>
+      </div>
+
+      <!-- FOLHA DA IMPRESSÃO -->
+      <div id="print-paper-content" class="print-paper">
+        <!-- Renderizado dinamicamente via JS (printServiceOrder) -->
       </div>
     </div>
   </div>

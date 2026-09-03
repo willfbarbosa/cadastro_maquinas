@@ -7,6 +7,7 @@ const STORAGE_EQUIPMENTS_KEY = 'app_inventory_equipments';
 const STORAGE_COLUMNS_KEY = 'app_inventory_visible_columns';
 const STORAGE_CASHBOOK_KEY = 'app_inventory_cashbook';
 const STORAGE_STOCK_KEY = 'app_inventory_stock';
+const STORAGE_SERVICE_ORDERS_KEY = 'app_inventory_service_orders';
 
 const DEFAULT_COLUMNS = {
   tipo: true,
@@ -25,15 +26,18 @@ const DEFAULT_COLUMNS = {
 };
 
 const App = {
-  activeTab: 'inventory', // 'inventory', 'stock' ou 'cashbook'
+  activeTab: 'inventory', // 'inventory', 'stock', 'cashbook' ou 'orders'
   equipments: [],
   cashbookEntries: [],
   stockItems: [],
+  serviceOrders: [],
   filteredEquipments: [],
   filteredCashbook: [],
   filteredStock: [],
+  filteredOrders: [],
   editingId: null,
   editingStockId: null,
+  editingOrderId: null,
   activeStockMovementId: null,
   activeMaintenanceEquipmentId: null,
   editingUserId: null,
@@ -45,6 +49,7 @@ const App = {
     await this.loadEquipments();
     await this.loadCashbook();
     await this.loadStock();
+    await this.loadServiceOrders();
     this.bindEvents();
     this.checkAuthState();
   },
@@ -55,31 +60,39 @@ const App = {
     const tabInvBtn = document.getElementById('tab-btn-inventory');
     const tabStkBtn = document.getElementById('tab-btn-stock');
     const tabCashBtn = document.getElementById('tab-btn-cashbook');
+    const tabOrdBtn = document.getElementById('tab-btn-orders');
 
     const invSection = document.getElementById('inventory-tab-section');
     const stkSection = document.getElementById('stock-tab-section');
     const cashSection = document.getElementById('cashbook-tab-section');
+    const ordSection = document.getElementById('orders-tab-section');
 
-    tabInvBtn.classList.remove('active');
-    tabStkBtn.classList.remove('active');
-    tabCashBtn.classList.remove('active');
+    if (tabInvBtn) tabInvBtn.classList.remove('active');
+    if (tabStkBtn) tabStkBtn.classList.remove('active');
+    if (tabCashBtn) tabCashBtn.classList.remove('active');
+    if (tabOrdBtn) tabOrdBtn.classList.remove('active');
 
-    invSection.style.display = 'none';
-    stkSection.style.display = 'none';
-    cashSection.style.display = 'none';
+    if (invSection) invSection.style.display = 'none';
+    if (stkSection) stkSection.style.display = 'none';
+    if (cashSection) cashSection.style.display = 'none';
+    if (ordSection) ordSection.style.display = 'none';
 
     if (tabName === 'inventory') {
-      tabInvBtn.classList.add('active');
-      invSection.style.display = 'block';
+      if (tabInvBtn) tabInvBtn.classList.add('active');
+      if (invSection) invSection.style.display = 'block';
       this.renderAll();
     } else if (tabName === 'stock') {
-      tabStkBtn.classList.add('active');
-      stkSection.style.display = 'block';
+      if (tabStkBtn) tabStkBtn.classList.add('active');
+      if (stkSection) stkSection.style.display = 'block';
       this.renderStockAll();
     } else if (tabName === 'cashbook') {
-      tabCashBtn.classList.add('active');
-      cashSection.style.display = 'block';
+      if (tabCashBtn) tabCashBtn.classList.add('active');
+      if (cashSection) cashSection.style.display = 'block';
       this.renderCashbookAll();
+    } else if (tabName === 'orders') {
+      if (tabOrdBtn) tabOrdBtn.classList.add('active');
+      if (ordSection) ordSection.style.display = 'block';
+      this.renderOrdersAll();
     }
   },
 
@@ -144,6 +157,12 @@ const App = {
     const btnNewStock = document.getElementById('btn-new-stock');
     if (btnNewStock) {
       btnNewStock.disabled = !canCreate;
+    }
+
+    const btnAddOrder = document.getElementById('btn-add-order');
+    if (btnAddOrder) {
+      btnAddOrder.disabled = !canCreate;
+      btnAddOrder.title = canCreate ? 'Nova OS / Orçamento' : 'Você não possui permissão para emitir ordens de serviço.';
     }
 
     const btnManageUsers = document.getElementById('btn-manage-users');
@@ -236,6 +255,33 @@ const App = {
 
   saveStockLocal() {
     localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify(this.stockItems));
+  },
+
+  async loadServiceOrders() {
+    try {
+      const res = await fetch('/api/service-orders');
+      const data = await res.json();
+      if (data.success) {
+        this.serviceOrders = data.orders;
+        localStorage.setItem(STORAGE_SERVICE_ORDERS_KEY, JSON.stringify(data.orders));
+        this.filteredOrders = [...this.serviceOrders];
+        return;
+      }
+    } catch (e) {
+      console.warn('API SQLite inacessível. Carregando OS/Orçamentos via localStorage.');
+    }
+    const stored = localStorage.getItem(STORAGE_SERVICE_ORDERS_KEY);
+    if (stored) {
+      this.serviceOrders = JSON.parse(stored);
+    } else {
+      this.serviceOrders = typeof MOCK_SERVICE_ORDERS !== 'undefined' ? [...MOCK_SERVICE_ORDERS] : [];
+      this.saveServiceOrdersLocal();
+    }
+    this.filteredOrders = [...this.serviceOrders];
+  },
+
+  saveServiceOrdersLocal() {
+    localStorage.setItem(STORAGE_SERVICE_ORDERS_KEY, JSON.stringify(this.serviceOrders));
   },
 
   renderAll() {
@@ -1712,6 +1758,532 @@ const App = {
     }
   },
 
+  // ============================================================================
+  // MÉTODOS DE GERENCIAMENTO DE ORDENS DE SERVIÇO E ORÇAMENTOS
+  // ============================================================================
+
+  renderOrdersAll() {
+    this.applyOrderFilters();
+    this.renderOrderMetrics();
+    this.renderOrdersTable();
+  },
+
+  applyOrderFilters() {
+    const search = (document.getElementById('order-search-input')?.value || '').toLowerCase().trim();
+    const typeFilter = document.getElementById('order-filter-type')?.value || '';
+    const statusFilter = document.getElementById('order-filter-status')?.value || '';
+
+    this.filteredOrders = this.serviceOrders.filter(ord => {
+      const matchSearch = !search || 
+        (ord.code && ord.code.toLowerCase().includes(search)) ||
+        (ord.clientName && ord.clientName.toLowerCase().includes(search)) ||
+        (ord.equipmentDescription && ord.equipmentDescription.toLowerCase().includes(search)) ||
+        (ord.technician && ord.technician.toLowerCase().includes(search));
+
+      const matchType = !typeFilter || ord.type === typeFilter;
+      const matchStatus = !statusFilter || ord.status === statusFilter;
+
+      return matchSearch && matchType && matchStatus;
+    });
+  },
+
+  renderOrderMetrics() {
+    const total = this.serviceOrders.length;
+    const pending = this.serviceOrders.filter(o => o.status === 'AGUARDANDO_APROVACAO' || o.type === 'ORCAMENTO').length;
+    const progress = this.serviceOrders.filter(o => o.status === 'EM_ANDAMENTO').length;
+    
+    const totalRevenue = this.serviceOrders
+      .filter(o => o.status === 'CONCLUIDO')
+      .reduce((sum, o) => sum + (parseFloat(o.totalCost) || 0), 0);
+
+    const elTotal = document.getElementById('metric-orders-total');
+    const elPending = document.getElementById('metric-orders-pending');
+    const elProgress = document.getElementById('metric-orders-progress');
+    const elRevenue = document.getElementById('metric-orders-revenue');
+
+    if (elTotal) elTotal.textContent = total;
+    if (elPending) elPending.textContent = pending;
+    if (elProgress) elProgress.textContent = progress;
+    if (elRevenue) {
+      elRevenue.textContent = totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+  },
+
+  renderOrdersTable() {
+    const tbody = document.getElementById('orders-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (this.filteredOrders.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+            Nenhuma Ordem de Serviço ou Orçamento encontrado.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const canEdit = AuthModule.hasPermission('canEdit');
+    const canDelete = AuthModule.hasPermission('canDelete');
+
+    this.filteredOrders.forEach(ord => {
+      const tr = document.createElement('tr');
+
+      const isQuote = ord.type === 'ORCAMENTO';
+      const typeBadge = isQuote 
+        ? `<span class="status-badge badge-orcamento">Orçamento</span>`
+        : `<span class="status-badge badge-os">Ordem de Serviço</span>`;
+
+      let statusBadge = '';
+      switch (ord.status) {
+        case 'AGUARDANDO_APROVACAO':
+          statusBadge = `<span class="status-badge status-badge-pending">Aguardando Aprovação</span>`;
+          break;
+        case 'APROVADO':
+          statusBadge = `<span class="status-badge status-badge-progress">Aprovado</span>`;
+          break;
+        case 'EM_ANDAMENTO':
+          statusBadge = `<span class="status-badge status-badge-progress">Em Andamento</span>`;
+          break;
+        case 'CONCLUIDO':
+          statusBadge = `<span class="status-badge status-badge-completed">Concluído</span>`;
+          break;
+        case 'CANCELADO':
+          statusBadge = `<span class="status-badge status-badge-cancelled">Cancelado</span>`;
+          break;
+        default:
+          statusBadge = `<span class="status-badge badge-draft">Rascunho</span>`;
+      }
+
+      const totalValue = (parseFloat(ord.totalCost) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      tr.innerHTML = `
+        <td><strong style="color: var(--accent-primary);">${this.escapeHtml(ord.code)}</strong></td>
+        <td>${typeBadge}</td>
+        <td>
+          <div style="font-weight: 600;">${this.escapeHtml(ord.clientName)}</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">${this.escapeHtml(ord.clientContact || 'Sem contato')}</div>
+        </td>
+        <td>${this.escapeHtml(ord.equipmentDescription || 'N/A')}</td>
+        <td>${this.escapeHtml(ord.technician || 'Técnico Responsável')}</td>
+        <td><strong style="color: #10b981;">${totalValue}</strong></td>
+        <td>${statusBadge}</td>
+        <td style="text-align: right; white-space: nowrap;">
+          <button class="btn btn-secondary btn-sm" onclick="App.openPrintOrderModal('${ord.id}')" title="Imprimir / Visualizar Documento">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+          </button>
+          ${isQuote && canEdit ? `
+            <button class="btn btn-secondary btn-sm" onclick="App.convertQuoteToOrder('${ord.id}')" title="Converter Orçamento em Ordem de Serviço">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+            </button>
+          ` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="App.openServiceOrderModal('${ord.id}')" ${!canEdit ? 'disabled' : ''} title="Editar Documento">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="App.deleteServiceOrder('${ord.id}')" ${!canDelete ? 'disabled' : ''} title="Excluir Documento">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          </button>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+  },
+
+  populateEquipmentOrderDropdown() {
+    const select = document.getElementById('order-field-select-equipment');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">-- Aparelho / Equipamento Avulso (Não cadastrado) --</option>';
+    this.equipments.forEach(eq => {
+      const option = document.createElement('option');
+      option.value = eq.id;
+      option.textContent = `${eq.host} (${eq.tipo} - ${eq.marca} ${eq.modelo}) - ${eq.usuario}`;
+      select.appendChild(option);
+    });
+  },
+
+  onSelectOrderEquipmentChange() {
+    const eqId = document.getElementById('order-field-select-equipment').value;
+    if (!eqId) return;
+
+    const eq = this.equipments.find(e => e.id === eqId);
+    if (eq) {
+      document.getElementById('order-field-client-name').value = eq.empresa || eq.setor || '';
+      document.getElementById('order-field-client-contact').value = `Usuário: ${eq.usuario} | AnyDesk: ${eq.anydesk} | IP: ${eq.ip}`;
+      document.getElementById('order-field-equipment-desc').value = `${eq.tipo}: ${eq.marca} ${eq.modelo} (Host: ${eq.host} / N/S: ${eq.ns})`;
+    }
+  },
+
+  handleOrderTypeChange() {
+    const type = document.getElementById('order-field-type').value;
+    const validityGroup = document.getElementById('order-field-validity')?.closest('.form-group');
+    if (validityGroup) {
+      validityGroup.style.display = type === 'ORCAMENTO' ? 'block' : 'none';
+    }
+  },
+
+  calculateOrderTotal() {
+    const services = parseFloat(document.getElementById('order-field-services-cost').value) || 0;
+    const parts = parseFloat(document.getElementById('order-field-parts-cost').value) || 0;
+    const total = services + parts;
+
+    const totalEl = document.getElementById('order-field-total-cost-display');
+    if (totalEl) {
+      totalEl.value = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+  },
+
+  openServiceOrderModal(id = null) {
+    if (!AuthModule.hasPermission('canCreate') && !id) {
+      this.showToast('Você não possui permissão para cadastrar documentos.', 'error');
+      return;
+    }
+
+    this.editingOrderId = id;
+    this.populateEquipmentOrderDropdown();
+
+    const titleEl = document.getElementById('order-modal-title');
+    const form = document.getElementById('service-order-form');
+    form.reset();
+
+    if (id) {
+      titleEl.textContent = 'Editar Ordem de Serviço / Orçamento';
+      const ord = this.serviceOrders.find(o => o.id === id);
+      if (ord) {
+        document.getElementById('order-field-id').value = ord.id;
+        document.getElementById('order-field-type').value = ord.type;
+        document.getElementById('order-field-status').value = ord.status;
+        document.getElementById('order-field-client-name').value = ord.clientName || '';
+        document.getElementById('order-field-client-contact').value = ord.clientContact || '';
+        document.getElementById('order-field-select-equipment').value = ord.equipmentId || '';
+        document.getElementById('order-field-equipment-desc').value = ord.equipmentDescription || '';
+        document.getElementById('order-field-problem').value = ord.problemDescription || '';
+        document.getElementById('order-field-diagnosis').value = ord.technicalDiagnosis || '';
+        document.getElementById('order-field-services-cost').value = ord.servicesCost || 0;
+        document.getElementById('order-field-parts-cost').value = ord.partsCost || 0;
+        document.getElementById('order-field-payment-method').value = ord.paymentMethod || 'PIX';
+        document.getElementById('order-field-technician').value = ord.technician || '';
+        document.getElementById('order-field-validity').value = ord.validityDate || '';
+      }
+    } else {
+      titleEl.textContent = 'Nova Ordem de Serviço / Orçamento';
+      document.getElementById('order-field-id').value = '';
+      document.getElementById('order-field-technician').value = AuthModule.getCurrentUser()?.fullname || '';
+    }
+
+    this.handleOrderTypeChange();
+    this.calculateOrderTotal();
+    document.getElementById('service-order-modal').classList.add('active');
+  },
+
+  closeServiceOrderModal() {
+    document.getElementById('service-order-modal').classList.remove('active');
+    this.editingOrderId = null;
+  },
+
+  async saveServiceOrder(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('order-field-id').value;
+    const type = document.getElementById('order-field-type').value;
+    const status = document.getElementById('order-field-status').value;
+    const clientName = document.getElementById('order-field-client-name').value.trim();
+    const clientContact = document.getElementById('order-field-client-contact').value.trim();
+    const equipmentId = document.getElementById('order-field-select-equipment').value || null;
+    const equipmentDescription = document.getElementById('order-field-equipment-desc').value.trim();
+    const problemDescription = document.getElementById('order-field-problem').value.trim();
+    const technicalDiagnosis = document.getElementById('order-field-diagnosis').value.trim();
+    const servicesCost = parseFloat(document.getElementById('order-field-services-cost').value) || 0;
+    const partsCost = parseFloat(document.getElementById('order-field-parts-cost').value) || 0;
+    const totalCost = servicesCost + partsCost;
+    const paymentMethod = document.getElementById('order-field-payment-method').value;
+    const technician = document.getElementById('order-field-technician').value.trim();
+    const validityDate = document.getElementById('order-field-validity').value;
+
+    const payload = {
+      id: id || undefined,
+      type,
+      status,
+      clientName,
+      clientContact,
+      equipmentId,
+      equipmentDescription,
+      problemDescription,
+      technicalDiagnosis,
+      servicesCost,
+      partsCost,
+      totalCost,
+      paymentMethod,
+      technician,
+      validityDate,
+      completionDate: status === 'CONCLUIDO' ? new Date().toISOString().split('T')[0] : ''
+    };
+
+    try {
+      if (id) {
+        await fetch(`/api/service-orders/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const index = this.serviceOrders.findIndex(o => o.id === id);
+        if (index !== -1) {
+          this.serviceOrders[index] = { ...this.serviceOrders[index], ...payload };
+        }
+        this.showToast('Documento atualizado com sucesso!', 'success');
+      } else {
+        const res = await fetch('/api/service-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        const newDoc = {
+          ...payload,
+          id: data.id || 'os_' + Date.now(),
+          code: data.code || (type === 'ORCAMENTO' ? 'ORC-' : 'OS-') + Date.now(),
+          createdAt: new Date().toISOString()
+        };
+        this.serviceOrders.unshift(newDoc);
+        this.showToast('Documento criado com sucesso!', 'success');
+      }
+    } catch (err) {
+      console.warn('Servidor offline. Salvando localmente.');
+      if (id) {
+        const index = this.serviceOrders.findIndex(o => o.id === id);
+        if (index !== -1) this.serviceOrders[index] = { ...this.serviceOrders[index], ...payload };
+      } else {
+        const newDoc = {
+          ...payload,
+          id: 'os_' + Date.now(),
+          code: (type === 'ORCAMENTO' ? 'ORC-' : 'OS-') + Math.floor(100 + Math.random() * 900),
+          createdAt: new Date().toISOString()
+        };
+        this.serviceOrders.unshift(newDoc);
+      }
+      this.saveServiceOrdersLocal();
+    }
+
+    // Pergunta se deseja integrar ao Livro Caixa se concluída
+    if (status === 'CONCLUIDO' && totalCost > 0) {
+      if (confirm(`A Ordem de Serviço foi concluída com valor de R$ ${totalCost.toFixed(2)}. Deseja lançar este valor como ENTRADA no Livro Caixa?`)) {
+        const cashPayload = {
+          date: new Date().toISOString().split('T')[0],
+          type: 'ENTRADA',
+          category: 'Serviços Prestados',
+          description: `Serviço OS ${payload.code || ''}: ${clientName} - ${equipmentDescription}`,
+          amount: totalCost,
+          paymentMethod,
+          equipmentId
+        };
+        try {
+          await fetch('/api/cashbook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cashPayload)
+          });
+          await this.loadCashbook();
+        } catch (e) {
+          this.cashbookEntries.unshift({ ...cashPayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
+          this.saveCashbookLocal();
+        }
+        this.showToast('Lançamento inserido no Livro Caixa!', 'success');
+      }
+    }
+
+    this.closeServiceOrderModal();
+    this.renderOrdersAll();
+  },
+
+  async convertQuoteToOrder(id) {
+    const ord = this.serviceOrders.find(o => o.id === id);
+    if (!ord) return;
+
+    if (confirm(`Deseja converter o orçamento "${ord.code}" em uma Ordem de Serviço oficial?`)) {
+      try {
+        const res = await fetch(`/api/service-orders/${id}/convert`, { method: 'PATCH' });
+        const data = await res.json();
+        ord.type = 'ORDEM_SERVICO';
+        ord.code = data.newCode || ord.code.replace('ORC-', 'OS-');
+        ord.status = 'EM_ANDAMENTO';
+        this.showToast(`Orçamento convertido na OS "${ord.code}" com sucesso!`, 'success');
+      } catch (err) {
+        ord.type = 'ORDEM_SERVICO';
+        ord.code = ord.code.replace('ORC-', 'OS-');
+        ord.status = 'EM_ANDAMENTO';
+        this.saveServiceOrdersLocal();
+        this.showToast(`Orçamento convertido na OS "${ord.code}" com sucesso!`, 'success');
+      }
+
+      this.renderOrdersAll();
+    }
+  },
+
+  async deleteServiceOrder(id) {
+    if (!AuthModule.hasPermission('canDelete')) {
+      this.showToast('Você não possui permissão para excluir documentos.', 'error');
+      return;
+    }
+
+    if (confirm('Deseja realmente excluir este documento?')) {
+      try {
+        await fetch(`/api/service-orders/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn('Exclusão remota indisponível, excluindo localmente.');
+      }
+      this.serviceOrders = this.serviceOrders.filter(o => o.id !== id);
+      this.saveServiceOrdersLocal();
+      this.showToast('Documento removido.', 'info');
+      this.renderOrdersAll();
+    }
+  },
+
+  openPrintOrderModal(id) {
+    const ord = this.serviceOrders.find(o => o.id === id);
+    if (!ord) return;
+
+    const paper = document.getElementById('print-paper-content');
+    const isQuote = ord.type === 'ORCAMENTO';
+    const docTitle = isQuote ? 'ORÇAMENTO TÉCNICO' : 'ORDEM DE SERVIÇO';
+
+    const servicesCost = parseFloat(ord.servicesCost) || 0;
+    const partsCost = parseFloat(ord.partsCost) || 0;
+    const totalCost = parseFloat(ord.totalCost) || (servicesCost + partsCost);
+
+    paper.innerHTML = `
+      <div class="print-header">
+        <div class="print-logo-box">
+          <h2>ELETRO ZONE</h2>
+          <p>Segurança Eletrônica, Automação & Manutenção Técnica</p>
+          <p style="font-size: 0.75rem; color: #6b7280;">Contato: (11) 9999-0000 | suporte@eletrozone.com.br</p>
+        </div>
+        <div class="print-doc-info">
+          <div class="doc-code">${this.escapeHtml(ord.code)}</div>
+          <div class="doc-type">${docTitle}</div>
+          <p style="font-size: 0.8rem; color: #4b5563; margin-top: 0.4rem;">Data: ${new Date(ord.createdAt).toLocaleDateString('pt-BR')}</p>
+        </div>
+      </div>
+
+      <div class="print-grid">
+        <div class="print-box">
+          <h4>DADOS DO CLIENTE</h4>
+          <p><strong>Cliente:</strong> ${this.escapeHtml(ord.clientName)}</p>
+          <p><strong>Contato:</strong> ${this.escapeHtml(ord.clientContact || 'Não informado')}</p>
+        </div>
+        <div class="print-box">
+          <h4>DADOS DO APARELHO / SERVIÇO</h4>
+          <p><strong>Equipamento:</strong> ${this.escapeHtml(ord.equipmentDescription)}</p>
+          <p><strong>Técnico Responsável:</strong> ${this.escapeHtml(ord.technician || 'Equipe Eletro Zone')}</p>
+        </div>
+      </div>
+
+      <div class="print-box" style="margin-bottom: 1.25rem;">
+        <h4>DEFEITO RELATADO / SOLICITAÇÃO</h4>
+        <p>${this.escapeHtml(ord.problemDescription)}</p>
+      </div>
+
+      ${ord.technicalDiagnosis ? `
+        <div class="print-box" style="margin-bottom: 1.25rem; background: #eff6ff; border-color: #bfdbfe;">
+          <h4 style="color: #1e40af;">LAUDO TÉCNICO & DIAGNÓSTICO</h4>
+          <p style="color: #1e3a8a;">${this.escapeHtml(ord.technicalDiagnosis)}</p>
+        </div>
+      ` : ''}
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th>Descrição dos Itens / Serviços</th>
+            <th style="text-align: right;">Forma Pagto</th>
+            <th style="text-align: right;">Valor (R$)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Serviços de Mão de Obra e Assistência Técnica</td>
+            <td style="text-align: right;">${this.escapeHtml(ord.paymentMethod)}</td>
+            <td style="text-align: right;">${servicesCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+          </tr>
+          <tr>
+            <td>Componentes, Peças e Insumos Aplicados</td>
+            <td style="text-align: right;">${this.escapeHtml(ord.paymentMethod)}</td>
+            <td style="text-align: right;">${partsCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="print-total-bar">
+        <div class="print-total-item">
+          <span>Serviços</span>
+          <strong>${servicesCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+        </div>
+        <div class="print-total-item">
+          <span>Peças</span>
+          <strong>${partsCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+        </div>
+        <div class="print-total-item highlight">
+          <span>VALOR TOTAL</span>
+          <strong>${totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+        </div>
+      </div>
+
+      <div style="font-size: 0.75rem; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 0.75rem; margin-top: 1rem;">
+        * Garantia de 90 dias para os serviços prestados e peças trocadas. ${isQuote ? 'Orçamento válido por 15 dias a contar da data de emissão.' : ''}
+      </div>
+
+      <div class="print-signatures">
+        <div class="signature-line">
+          Técnico Responsável (Eletro Zone)
+        </div>
+        <div class="signature-line">
+          Assinatura do Cliente / De Acordo
+        </div>
+      </div>
+    `;
+
+    document.getElementById('print-order-modal').classList.add('active');
+  },
+
+  closePrintOrderModal() {
+    document.getElementById('print-order-modal').classList.remove('active');
+  },
+
+  exportOrdersCSV() {
+    if (this.filteredOrders.length === 0) {
+      alert('Não há registros de Ordens de Serviço ou Orçamentos para exportar.');
+      return;
+    }
+
+    const headers = ['Código', 'Tipo', 'Cliente', 'Contato', 'Equipamento', 'Status', 'Mão de Obra (R$)', 'Peças (R$)', 'Total (R$)', 'Técnico', 'Data Emissão'];
+    const rows = this.filteredOrders.map(o => [
+      `"${o.code || ''}"`,
+      `"${o.type || ''}"`,
+      `"${o.clientName || ''}"`,
+      `"${o.clientContact || ''}"`,
+      `"${o.equipmentDescription || ''}"`,
+      `"${o.status || ''}"`,
+      (o.servicesCost || 0).toFixed(2),
+      (o.partsCost || 0).toFixed(2),
+      (o.totalCost || 0).toFixed(2),
+      `"${o.technician || ''}"`,
+      `"${new Date(o.createdAt).toLocaleDateString('pt-BR')}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `ordens_servico_eletro_zone_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    this.showToast('Relatório CSV de OS exportado com sucesso!', 'success');
+  },
+
   showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -1809,6 +2381,12 @@ const App = {
     document.getElementById('cashbook-type-filter').addEventListener('change', () => this.renderCashbookAll());
     document.getElementById('cashbook-month-filter').addEventListener('change', () => this.renderCashbookAll());
     document.getElementById('cashbook-search-input').addEventListener('input', () => this.renderCashbookAll());
+
+    // Eventos Ordens de Serviço & Orçamentos
+    document.getElementById('service-order-form').addEventListener('submit', (e) => this.saveServiceOrder(e));
+    document.getElementById('order-search-input').addEventListener('input', () => this.renderOrdersAll());
+    document.getElementById('order-filter-type').addEventListener('change', () => this.renderOrdersAll());
+    document.getElementById('order-filter-status').addEventListener('change', () => this.renderOrdersAll());
 
     document.getElementById('log-filter-type').addEventListener('change', () => this.renderLogsTable());
     document.getElementById('log-search-input').addEventListener('input', () => this.renderLogsTable());

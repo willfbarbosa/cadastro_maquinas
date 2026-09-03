@@ -331,6 +331,136 @@ app.delete('/api/cashbook/:id', async (req, res) => {
 });
 
 // ============================================================================
+// ROTAS DE ORDENS DE SERVIÇO E ORÇAMENTOS
+// ============================================================================
+
+app.get('/api/service-orders', async (req, res) => {
+  try {
+    const orders = await dbAll('SELECT * FROM service_orders ORDER BY createdAt DESC');
+    res.json({ success: true, orders });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/service-orders', async (req, res) => {
+  try {
+    const data = req.body;
+    const id = data.id || 'os_' + Date.now();
+    const createdAt = new Date().toISOString();
+
+    // Gerar código amigável se não enviado
+    let code = data.code;
+    if (!code) {
+      const prefix = data.type === 'ORCAMENTO' ? 'ORC' : 'OS';
+      const year = new Date().getFullYear();
+      const count = await dbGet('SELECT COUNT(*) as count FROM service_orders');
+      const numStr = String(count.count + 1).padStart(3, '0');
+      code = `${prefix}-${year}-${numStr}`;
+    }
+
+    const servicesCost = parseFloat(data.servicesCost) || 0;
+    const partsCost = parseFloat(data.partsCost) || 0;
+    const totalCost = servicesCost + partsCost;
+
+    await dbRun(
+      `INSERT INTO service_orders (id, code, type, clientName, clientContact, equipmentId, equipmentDescription, status, problemDescription, technicalDiagnosis, servicesCost, partsCost, totalCost, paymentMethod, technician, validityDate, completionDate, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        code,
+        data.type || 'ORDEM_SERVICO',
+        data.clientName,
+        data.clientContact || '',
+        data.equipmentId || null,
+        data.equipmentDescription || '',
+        data.status || 'AGUARDANDO_APROVACAO',
+        data.problemDescription || '',
+        data.technicalDiagnosis || '',
+        servicesCost,
+        partsCost,
+        totalCost,
+        data.paymentMethod || 'PIX',
+        data.technician || 'Suporte Técnico',
+        data.validityDate || '',
+        data.completionDate || '',
+        createdAt
+      ]
+    );
+
+    res.json({ success: true, id, code });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/service-orders/:id', async (req, res) => {
+  try {
+    const data = req.body;
+    const updatedAt = new Date().toISOString();
+    const servicesCost = parseFloat(data.servicesCost) || 0;
+    const partsCost = parseFloat(data.partsCost) || 0;
+    const totalCost = servicesCost + partsCost;
+
+    await dbRun(
+      `UPDATE service_orders SET type = ?, clientName = ?, clientContact = ?, equipmentId = ?, equipmentDescription = ?, status = ?, problemDescription = ?, technicalDiagnosis = ?, servicesCost = ?, partsCost = ?, totalCost = ?, paymentMethod = ?, technician = ?, validityDate = ?, completionDate = ?, updatedAt = ?
+       WHERE id = ?`,
+      [
+        data.type,
+        data.clientName,
+        data.clientContact || '',
+        data.equipmentId || null,
+        data.equipmentDescription || '',
+        data.status,
+        data.problemDescription || '',
+        data.technicalDiagnosis || '',
+        servicesCost,
+        partsCost,
+        totalCost,
+        data.paymentMethod || 'PIX',
+        data.technician || 'Suporte Técnico',
+        data.validityDate || '',
+        data.completionDate || '',
+        updatedAt,
+        req.params.id
+      ]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.patch('/api/service-orders/:id/convert', async (req, res) => {
+  try {
+    const order = await dbGet('SELECT * FROM service_orders WHERE id = ?', [req.params.id]);
+    if (!order) return res.status(404).json({ success: false, message: 'Ordem de serviço não encontrada.' });
+
+    const newCode = order.code.replace('ORC-', 'OS-');
+    const updatedAt = new Date().toISOString();
+
+    await dbRun(
+      `UPDATE service_orders SET type = 'ORDEM_SERVICO', code = ?, status = 'EM_ANDAMENTO', updatedAt = ? WHERE id = ?`,
+      [newCode, updatedAt, req.params.id]
+    );
+
+    res.json({ success: true, newCode });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/service-orders/:id', async (req, res) => {
+  try {
+    await dbRun('DELETE FROM service_orders WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ============================================================================
 // ROTAS DE LOGS DO SISTEMA
 // ============================================================================
 

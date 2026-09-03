@@ -139,6 +139,31 @@ async function initDatabase() {
     )
   `);
 
+  // 7. Tabela de Ordens de Serviço e Orçamentos
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS service_orders (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL,
+      type TEXT NOT NULL,
+      clientName TEXT NOT NULL,
+      clientContact TEXT,
+      equipmentId TEXT,
+      equipmentDescription TEXT NOT NULL,
+      status TEXT NOT NULL,
+      problemDescription TEXT NOT NULL,
+      technicalDiagnosis TEXT,
+      servicesCost REAL DEFAULT 0,
+      partsCost REAL DEFAULT 0,
+      totalCost REAL DEFAULT 0,
+      paymentMethod TEXT,
+      technician TEXT,
+      validityDate TEXT,
+      completionDate TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT
+    )
+  `);
+
   await seedInitialData();
   console.log('✅ Banco de dados SQLite pronto para uso!');
 }
@@ -296,6 +321,82 @@ async function seedInitialData() {
         `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [c.id, c.date, c.type, c.category, c.description, c.amount, c.paymentMethod, c.equipmentId, new Date().toISOString()]
+      );
+    }
+  }
+
+  // Verificação e População Inicial de Ordens de Serviço e Orçamentos
+  const countOrders = await dbGet('SELECT COUNT(*) as count FROM service_orders');
+  if (countOrders.count === 0) {
+    console.log('📋 Inserindo dados iniciais de OS & Orçamentos no SQLite...');
+    const initialOrders = [
+      {
+        id: 'os_2001',
+        code: 'ORC-2026-001',
+        type: 'ORCAMENTO',
+        clientName: 'Empresa Alfa Soluções Digital',
+        clientContact: '(11) 98822-1044 / contato@alfasolucoes.com',
+        equipmentId: 'eq_1001',
+        equipmentDescription: 'PC-TI-ADM01 (Dell OptiPlex 7090 Tower)',
+        status: 'AGUARDANDO_APROVACAO',
+        problemDescription: 'Computador desliga sozinho durante uso intenso e apresenta lentidão extrema.',
+        technicalDiagnosis: 'Superaquecimento do processador devido a pasta térmica ressecada e necessidade de upgrade para SSD NVMe 1TB.',
+        servicesCost: 150.00,
+        partsCost: 380.00,
+        totalCost: 530.00,
+        paymentMethod: 'PIX',
+        technician: 'Carlos Eduardo (TI)',
+        validityDate: '2026-09-15',
+        completionDate: '',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'os_2002',
+        code: 'OS-2026-002',
+        type: 'ORDEM_SERVICO',
+        clientName: 'Condomínio Residencial Solar',
+        clientContact: '(11) 3456-7890 / gerencia@condominiosolar.com',
+        equipmentId: 'eq_1004',
+        equipmentDescription: 'MTR-BOMBA-01 (Motor WEG Trifásico 5CV)',
+        status: 'EM_ANDAMENTO',
+        problemDescription: 'Motor elétrico da bomba d\'água fazendo ruído excessivo de rolamento travando.',
+        technicalDiagnosis: 'Troca dos rolamentos dianteiro/traseiro blindados SKF e alinhamento mecânico do eixo.',
+        servicesCost: 300.00,
+        partsCost: 180.00,
+        totalCost: 480.00,
+        paymentMethod: 'BOLETO',
+        technician: 'Técnico Especialista em Motores',
+        validityDate: '',
+        completionDate: '',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'os_2003',
+        code: 'OS-2026-003',
+        type: 'ORDEM_SERVICO',
+        clientName: 'Setor de Recursos Humanos - Matriz',
+        clientContact: 'Ramal 204 (Mariana)',
+        equipmentId: 'eq_1002',
+        equipmentDescription: 'NOTE-RH-02 (Lenovo ThinkPad E14 Gen 2)',
+        status: 'CONCLUIDO',
+        problemDescription: 'Tela piscando e sistema operacional não iniciando após atualização corrompida.',
+        technicalDiagnosis: 'Reinstalação limpa do Windows 11 Pro, backup de arquivos e restauração dos drivers de vídeo.',
+        servicesCost: 200.00,
+        partsCost: 0.00,
+        totalCost: 200.00,
+        paymentMethod: 'PIX',
+        technician: 'Lucas Silva',
+        validityDate: '',
+        completionDate: '2026-09-02',
+        createdAt: new Date().toISOString()
+      }
+    ];
+
+    for (const ord of initialOrders) {
+      await dbRun(
+        `INSERT INTO service_orders (id, code, type, clientName, clientContact, equipmentId, equipmentDescription, status, problemDescription, technicalDiagnosis, servicesCost, partsCost, totalCost, paymentMethod, technician, validityDate, completionDate, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [ord.id, ord.code, ord.type, ord.clientName, ord.clientContact, ord.equipmentId, ord.equipmentDescription, ord.status, ord.problemDescription, ord.technicalDiagnosis, ord.servicesCost, ord.partsCost, ord.totalCost, ord.paymentMethod, ord.technician, ord.validityDate, ord.completionDate, ord.createdAt]
       );
     }
   }
