@@ -1,0 +1,24 @@
+{
+  "name": "eletro-zone-gestao",
+  "version": "2.0.0",
+  "description": "Sistema de Gestão Integrada de Ativos, Controle de Estoque e Livro Caixa Eletro Zone (SQLite Backend)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "sqlite",
+    "express",
+    "inventario",
+    "estoque",
+    "livro-caixa"
+  ],
+  "author": "Eletro Zone",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  }
+}

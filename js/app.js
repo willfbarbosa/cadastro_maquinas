@@ -1,6 +1,6 @@
 /**
- * APLICAÇÃO PRINCIPAL - GESTÃO INTEGRADA ELETRO ZONE
- * Contempla: Inventário de TI/Motores, Controle de Estoque (Entrada/Saída/Valores/Estados), Livro Caixa e RBAC.
+ * APLICAÇÃO PRINCIPAL - GESTÃO INTEGRADA ELETRO ZONE (SQLITE BACKEND)
+ * Contempla: Inventário de TI/Motores, Controle de Estoque, Livro Caixa e RBAC.
  */
 
 const STORAGE_EQUIPMENTS_KEY = 'app_inventory_equipments';
@@ -39,11 +39,12 @@ const App = {
   editingUserId: null,
   visibleColumns: { ...DEFAULT_COLUMNS },
 
-  init() {
+  async init() {
     this.loadVisibleColumns();
-    this.loadEquipments();
-    this.loadCashbook();
-    this.loadStock();
+    await AuthModule.fetchUsersFromAPI();
+    await this.loadEquipments();
+    await this.loadCashbook();
+    await this.loadStock();
     this.bindEvents();
     this.checkAuthState();
   },
@@ -156,48 +157,84 @@ const App = {
     }
   },
 
-  loadEquipments() {
+  async loadEquipments() {
+    try {
+      const res = await fetch('/api/equipments');
+      const data = await res.json();
+      if (data.success) {
+        this.equipments = data.equipments;
+        localStorage.setItem(STORAGE_EQUIPMENTS_KEY, JSON.stringify(data.equipments));
+        this.filteredEquipments = [...this.equipments];
+        return;
+      }
+    } catch (e) {
+      console.warn('API SQLite inacessível. Carregando equipamentos via localStorage.');
+    }
     const stored = localStorage.getItem(STORAGE_EQUIPMENTS_KEY);
     if (stored) {
       this.equipments = JSON.parse(stored);
     } else {
       this.equipments = [...MOCK_EQUIPMENTS];
-      this.saveEquipments();
+      this.saveEquipmentsLocal();
     }
     this.filteredEquipments = [...this.equipments];
   },
 
-  saveEquipments() {
+  saveEquipmentsLocal() {
     localStorage.setItem(STORAGE_EQUIPMENTS_KEY, JSON.stringify(this.equipments));
   },
 
-  loadCashbook() {
+  async loadCashbook() {
+    try {
+      const res = await fetch('/api/cashbook');
+      const data = await res.json();
+      if (data.success) {
+        this.cashbookEntries = data.entries;
+        localStorage.setItem(STORAGE_CASHBOOK_KEY, JSON.stringify(data.entries));
+        this.filteredCashbook = [...this.cashbookEntries];
+        return;
+      }
+    } catch (e) {
+      console.warn('API SQLite inacessível. Carregando Livro Caixa via localStorage.');
+    }
     const stored = localStorage.getItem(STORAGE_CASHBOOK_KEY);
     if (stored) {
       this.cashbookEntries = JSON.parse(stored);
     } else {
       this.cashbookEntries = [...MOCK_CASHBOOK];
-      this.saveCashbook();
+      this.saveCashbookLocal();
     }
     this.filteredCashbook = [...this.cashbookEntries];
   },
 
-  saveCashbook() {
+  saveCashbookLocal() {
     localStorage.setItem(STORAGE_CASHBOOK_KEY, JSON.stringify(this.cashbookEntries));
   },
 
-  loadStock() {
+  async loadStock() {
+    try {
+      const res = await fetch('/api/stock');
+      const data = await res.json();
+      if (data.success) {
+        this.stockItems = data.items;
+        localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify(data.items));
+        this.filteredStock = [...this.stockItems];
+        return;
+      }
+    } catch (e) {
+      console.warn('API SQLite inacessível. Carregando Estoque via localStorage.');
+    }
     const stored = localStorage.getItem(STORAGE_STOCK_KEY);
     if (stored) {
       this.stockItems = JSON.parse(stored);
     } else {
       this.stockItems = [...MOCK_STOCK];
-      this.saveStock();
+      this.saveStockLocal();
     }
     this.filteredStock = [...this.stockItems];
   },
 
-  saveStock() {
+  saveStockLocal() {
     localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify(this.stockItems));
   },
 
@@ -674,10 +711,11 @@ const App = {
     }
   },
 
-  saveDeviceForm(e) {
+  async saveDeviceForm(e) {
     e.preventDefault();
 
     const deviceData = {
+      id: this.editingId,
       tipo: document.getElementById('field-tipo').value,
       host: document.getElementById('field-host').value.trim(),
       ip: document.getElementById('field-ip').value.trim(),
@@ -697,45 +735,31 @@ const App = {
       fornecedor: document.getElementById('field-fornecedor').value.trim()
     };
 
-    if (this.editingId) {
-      const index = this.equipments.findIndex(e => e.id === this.editingId);
-      if (index !== -1) {
-        this.equipments[index] = {
-          ...this.equipments[index],
-          ...deviceData,
-          updatedAt: new Date().toISOString()
-        };
+    try {
+      const url = this.editingId ? `/api/equipments/${this.editingId}` : '/api/equipments';
+      const method = this.editingId ? 'PUT' : 'POST';
 
+      const res = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(deviceData)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        this.showToast(this.editingId ? 'Equipamento atualizado com sucesso!' : 'Equipamento cadastrado com sucesso!', 'success');
         if (typeof LoggerModule !== 'undefined') {
           LoggerModule.modification(
-            'EDITAR_EQUIPAMENTO',
-            `Equipamento "${deviceData.host}" (IP: ${deviceData.ip}) alterado.`
+            this.editingId ? 'EDITAR_EQUIPAMENTO' : 'CADASTRAR_EQUIPAMENTO',
+            `Equipamento "${deviceData.host}" (IP: ${deviceData.ip}) salvo.`
           );
         }
-
-        this.showToast('Equipamento atualizado com sucesso!', 'success');
       }
-    } else {
-      const newDevice = {
-        id: 'eq_' + Date.now(),
-        ...deviceData,
-        maintenances: [],
-        createdAt: new Date().toISOString()
-      };
-      this.equipments.unshift(newDevice);
-
-      if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.modification(
-          'CADASTRAR_EQUIPAMENTO',
-          `Novo ${deviceData.tipo} "${deviceData.host}" cadastrado.`,
-          newDevice
-        );
-      }
-
-      this.showToast('Equipamento cadastrado com sucesso!', 'success');
+    } catch (err) {
+      console.warn('Erro na requisição SQLite:', err);
     }
 
-    this.saveEquipments();
+    await this.loadEquipments();
     this.closeFormModal();
     this.renderAll();
   },
@@ -839,7 +863,7 @@ const App = {
     document.getElementById('detail-modal').classList.remove('active');
   },
 
-  confirmDelete(id) {
+  async confirmDelete(id) {
     if (!AuthModule.hasPermission('canDelete')) {
       alert('Você não possui permissão para excluir equipamentos.');
       return;
@@ -849,17 +873,13 @@ const App = {
     if (!item) return;
 
     if (confirm(`Deseja realmente excluir o equipamento "${item.host}" (IP: ${item.ip})?`)) {
-      this.equipments = this.equipments.filter(e => e.id !== id);
-
-      if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.modification(
-          'EXCLUIR_EQUIPAMENTO',
-          `Equipamento "${item.host}" (IP: ${item.ip}) foi excluído do sistema.`,
-          item
-        );
+      try {
+        await fetch(`/api/equipments/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn('Erro ao deletar equipamento via API:', err);
       }
 
-      this.saveEquipments();
+      await this.loadEquipments();
       this.renderAll();
       this.showToast('Equipamento excluído com sucesso.', 'info');
     }
@@ -942,14 +962,11 @@ const App = {
     });
   },
 
-  saveMaintenanceRecord(e) {
+  async saveMaintenanceRecord(e) {
     e.preventDefault();
     if (!this.activeMaintenanceEquipmentId) return;
 
-    const itemIndex = this.equipments.findIndex(e => e.id === this.activeMaintenanceEquipmentId);
-    if (itemIndex === -1) return;
-
-    const equipment = this.equipments[itemIndex];
+    const eqId = this.activeMaintenanceEquipmentId;
     const date = document.getElementById('mnt-date').value;
     const description = document.getElementById('mnt-description').value.trim();
     const partsCost = parseFloat(document.getElementById('mnt-partsCost').value) || 0;
@@ -959,49 +976,23 @@ const App = {
     const technician = document.getElementById('mnt-technician').value.trim() || 'Suporte Técnico';
     const autoCashbook = document.getElementById('mnt-auto-cashbook').checked;
 
-    const newRecord = {
-      id: 'mnt_' + Date.now(),
-      date,
-      description,
-      partsCost,
-      laborCost,
-      cost: totalCost,
-      paymentMethod,
-      technician
-    };
-
-    if (!equipment.maintenances) {
-      equipment.maintenances = [];
-    }
-
-    equipment.maintenances.unshift(newRecord);
-    this.saveEquipments();
-
-    if (autoCashbook && totalCost > 0) {
-      const cashEntry = {
-        id: 'cb_' + Date.now(),
-        date: date,
-        type: 'SAIDA',
-        category: 'Manutenção / Peças',
-        description: `Manutenção ${equipment.host}: ${description}`,
-        amount: totalCost,
-        paymentMethod: paymentMethod,
-        equipmentId: equipment.id,
-        createdAt: new Date().toISOString()
-      };
-      this.cashbookEntries.unshift(cashEntry);
-      this.saveCashbook();
-    }
-
-    if (typeof LoggerModule !== 'undefined') {
-      LoggerModule.modification(
-        'MANUTENCAO_REGISTRADA',
-        `Manutenção/Peças em "${equipment.host}": R$ ${totalCost.toFixed(2)} (${description})`
-      );
+    try {
+      await fetch(`/api/equipments/${eqId}/maintenances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, description, partsCost, laborCost, cost: totalCost, paymentMethod, technician, autoCashbook })
+      });
+    } catch (err) {
+      console.warn('Erro ao salvar manutenção via API:', err);
     }
 
     this.showToast('Manutenção registrada com sucesso!', 'success');
-    this.renderMaintenanceList(equipment);
+    await this.loadEquipments();
+    await this.loadCashbook();
+
+    const updatedEq = this.equipments.find(e => e.id === eqId);
+    if (updatedEq) this.renderMaintenanceList(updatedEq);
+
     document.getElementById('maintenance-form').reset();
     document.getElementById('mnt-date').value = new Date().toISOString().slice(0, 10);
     document.getElementById('mnt-totalCostDisplay').textContent = 'R$ 0,00';
@@ -1009,7 +1000,7 @@ const App = {
   },
 
   // ==========================================================================
-  // MÓDULO CONTROLE DE ESTOQUE (ENTRADAS, SAÍDAS, ESTADOS E VALORES)
+  // MÓDULO CONTROLE DE ESTOQUE
   // ==========================================================================
 
   renderStockAll() {
@@ -1111,26 +1102,24 @@ const App = {
     });
   },
 
-  quickStockMovement(id, change) {
-    const item = this.stockItems.find(i => i.id === id);
-    if (!item) return;
-
-    const newQty = (parseInt(item.quantity) || 0) + change;
-    if (newQty < 0) {
-      alert('Quantidade no estoque não pode ser negativa.');
-      return;
+  async quickStockMovement(id, change) {
+    try {
+      const res = await fetch(`/api/stock/${id}/movement`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ change })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.message);
+        return;
+      }
+    } catch (err) {
+      console.warn('Erro ao registrar movimentação via API:', err);
     }
 
-    item.quantity = newQty;
-    this.saveStock();
-
-    const actionText = change > 0 ? `Entrada (+${change})` : `Saída (${change})`;
-    this.showToast(`${actionText} registrada para "${item.name}". Estoque atual: ${newQty}`, change > 0 ? 'success' : 'info');
-
-    if (typeof LoggerModule !== 'undefined') {
-      LoggerModule.modification('MOVIMENTACAO_ESTOQUE', `${actionText} no produto "${item.name}". Nova Qtd: ${newQty}`);
-    }
-
+    await this.loadStock();
+    this.showToast(change > 0 ? 'Entrada no estoque salva!' : 'Saída no estoque salva!', change > 0 ? 'success' : 'info');
     this.renderStockAll();
   },
 
@@ -1174,7 +1163,7 @@ const App = {
     this.editingStockId = null;
   },
 
-  saveStockForm(e) {
+  async saveStockForm(e) {
     e.preventDefault();
 
     const name = document.getElementById('stk-field-name').value.trim();
@@ -1185,35 +1174,33 @@ const App = {
     const unitPrice = parseFloat(document.getElementById('stk-field-price').value) || 0;
     const location = document.getElementById('stk-field-location').value.trim() || 'Almoxarifado';
 
-    if (this.editingStockId) {
-      const idx = this.stockItems.findIndex(i => i.id === this.editingStockId);
-      if (idx !== -1) {
-        this.stockItems[idx] = {
-          ...this.stockItems[idx],
-          name, category, condition, quantity, minQuantity, unitPrice, location,
-          updatedAt: new Date().toISOString()
-        };
-        this.showToast('Produto de estoque atualizado!', 'success');
-      }
-    } else {
-      const newItem = {
-        id: 'stk_' + Date.now(),
-        name, category, condition, quantity, minQuantity, unitPrice, location,
-        createdAt: new Date().toISOString()
-      };
-      this.stockItems.unshift(newItem);
-      this.showToast('Produto cadastrado no estoque com sucesso!', 'success');
+    try {
+      const url = this.editingStockId ? `/api/stock/${this.editingStockId}` : '/api/stock';
+      const method = this.editingStockId ? 'PUT' : 'POST';
+
+      await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, category, condition, quantity, minQuantity, unitPrice, location })
+      });
+    } catch (err) {
+      console.warn('Erro ao salvar produto no estoque via API:', err);
     }
 
-    this.saveStock();
+    await this.loadStock();
+    this.showToast(this.editingStockId ? 'Produto atualizado!' : 'Produto cadastrado!', 'success');
     this.closeStockFormModal();
     this.renderStockAll();
   },
 
-  deleteStockItem(id) {
+  async deleteStockItem(id) {
     if (confirm('Deseja realmente remover este produto do estoque?')) {
-      this.stockItems = this.stockItems.filter(i => i.id !== id);
-      this.saveStock();
+      try {
+        await fetch(`/api/stock/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn('Erro ao excluir item do estoque:', err);
+      }
+      await this.loadStock();
       this.renderStockAll();
       this.showToast('Produto removido do estoque.', 'info');
     }
@@ -1376,7 +1363,7 @@ const App = {
     document.getElementById('cashbook-modal').classList.remove('active');
   },
 
-  saveCashbookEntry(e) {
+  async saveCashbookEntry(e) {
     e.preventDefault();
 
     const date = document.getElementById('cb-field-date').value;
@@ -1386,33 +1373,30 @@ const App = {
     const amount = parseFloat(document.getElementById('cb-field-amount').value) || 0;
     const paymentMethod = document.getElementById('cb-field-payment').value;
 
-    const newEntry = {
-      id: 'cb_' + Date.now(),
-      date,
-      type,
-      category,
-      description,
-      amount,
-      paymentMethod,
-      createdAt: new Date().toISOString()
-    };
-
-    this.cashbookEntries.unshift(newEntry);
-    this.saveCashbook();
-
-    if (typeof LoggerModule !== 'undefined') {
-      LoggerModule.modification('LIVRO_CAIXA', `Lançamento ${type}: R$ ${amount.toFixed(2)} (${description})`);
+    try {
+      await fetch('/api/cashbook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, type, category, description, amount, paymentMethod })
+      });
+    } catch (err) {
+      console.warn('Erro ao salvar no Livro Caixa via API:', err);
     }
 
     this.showToast('Lançamento adicionado ao Livro Caixa!', 'success');
     this.closeCashbookModal();
+    await this.loadCashbook();
     this.renderCashbookAll();
   },
 
-  deleteCashbookEntry(id) {
+  async deleteCashbookEntry(id) {
     if (confirm('Deseja realmente remover este lançamento do Livro Caixa?')) {
-      this.cashbookEntries = this.cashbookEntries.filter(e => e.id !== id);
-      this.saveCashbook();
+      try {
+        await fetch(`/api/cashbook/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn('Erro ao deletar lançamento via API:', err);
+      }
+      await this.loadCashbook();
       this.renderCashbookAll();
       this.showToast('Lançamento removido.', 'info');
     }
@@ -1538,7 +1522,7 @@ const App = {
     this.editingUserId = null;
   },
 
-  saveUserForm(e) {
+  async saveUserForm(e) {
     e.preventDefault();
 
     const fullname = document.getElementById('user-field-name').value;
@@ -1553,7 +1537,7 @@ const App = {
       isAdmin: isAdmin
     };
 
-    const res = AuthModule.saveUser({ fullname, username, password, permissions }, this.editingUserId);
+    const res = await AuthModule.saveUserAsync({ fullname, username, password, permissions }, this.editingUserId);
     if (res.success) {
       this.showToast('Dados do usuário salvos com sucesso!', 'success');
       this.closeUserFormModal();
@@ -1563,9 +1547,9 @@ const App = {
     }
   },
 
-  deleteUser(userId) {
+  async deleteUser(userId) {
     if (confirm('Deseja realmente remover este usuário?')) {
-      const res = AuthModule.deleteUser(userId);
+      const res = await AuthModule.deleteUserAsync(userId);
       if (res.success) {
         this.showToast('Usuário removido.', 'info');
         this.renderUsersTable();
@@ -1622,19 +1606,15 @@ const App = {
     this.showToast('Relatório CSV exportado com sucesso!', 'success');
   },
 
-  loadSampleData() {
+  async loadSampleData() {
     if (confirm('Deseja recarregar a lista com os dados de exemplo de demonstração? Os dados atuais serão substituídos.')) {
       this.equipments = [...MOCK_EQUIPMENTS];
       this.cashbookEntries = [...MOCK_CASHBOOK];
       this.stockItems = [...MOCK_STOCK];
 
-      if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.modification('CARREGAR_DEMO', 'Carregado lote de dados de demonstração iniciais (Ativos, Livro Caixa e Estoque).');
-      }
-
-      this.saveEquipments();
-      this.saveCashbook();
-      this.saveStock();
+      this.saveEquipmentsLocal();
+      this.saveCashbookLocal();
+      this.saveStockLocal();
 
       this.renderAll();
       if (this.activeTab === 'stock') this.renderStockAll();
@@ -1659,14 +1639,14 @@ const App = {
     document.getElementById('logs-modal').classList.remove('active');
   },
 
-  renderLogsTable() {
+  async renderLogsTable() {
     if (typeof LoggerModule === 'undefined') return;
 
     const tbody = document.getElementById('logs-table-body');
     const filterType = document.getElementById('log-filter-type').value;
     const searchQuery = document.getElementById('log-search-input').value.trim().toLowerCase();
 
-    let logs = LoggerModule.getLogs();
+    let logs = await LoggerModule.getLogsAsync();
 
     if (filterType) {
       logs = logs.filter(l => l.type === filterType);
@@ -1712,12 +1692,12 @@ const App = {
     });
   },
 
-  clearAllLogs() {
+  async clearAllLogs() {
     if (!AuthModule.hasPermission('isAdmin')) return;
 
     if (confirm('Deseja realmente limpar todo o histórico de logs do sistema?')) {
       if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.clearLogs();
+        await LoggerModule.clearLogsAsync();
         this.renderLogsTable();
         this.showToast('Histórico de logs limpo.', 'info');
       }
@@ -1758,7 +1738,7 @@ const App = {
   },
 
   bindEvents() {
-    document.getElementById('first-setup-form').addEventListener('submit', (e) => {
+    document.getElementById('first-setup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('setup-fullname').value;
       const username = document.getElementById('setup-username').value;
@@ -1772,7 +1752,7 @@ const App = {
         return;
       }
 
-      const res = AuthModule.registerMasterUser(name, username, pass);
+      const res = await AuthModule.registerMasterUserAsync(name, username, pass);
       if (res.success) {
         this.checkAuthState();
         this.showToast('Administrador cadastrado com sucesso! Bem-vindo.', 'success');
@@ -1782,13 +1762,13 @@ const App = {
       }
     });
 
-    document.getElementById('login-form').addEventListener('submit', (e) => {
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const user = document.getElementById('login-username').value;
       const pass = document.getElementById('login-password').value;
       const errorDiv = document.getElementById('login-error-msg');
 
-      const res = AuthModule.login(user, pass);
+      const res = await AuthModule.loginAsync(user, pass);
       if (res.success) {
         this.checkAuthState();
         this.showToast(`Bem-vindo de volta, ${res.user.fullname}!`, 'success');

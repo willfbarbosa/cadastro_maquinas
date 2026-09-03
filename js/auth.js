@@ -1,106 +1,170 @@
 /**
- * MÓDULO DE AUTENTICAÇÃO, GERENCIAMENTO DE USUÁRIOS E PERMISSÕES (RBAC)
- * Controla os privilégios de acesso: Somente Leitura, Cadastrar, Editar, Excluir e Admin.
+ * MÓDULO DE AUTENTICAÇÃO E PERMISSÕES (RBAC) - ELETRO ZONE
+ * Suporte a SQLite Backend API com fallback assíncrono para localStorage.
  */
 
-const STORAGE_KEYS = {
-  USERS: 'app_inventory_users',
-  CURRENT_USER: 'app_inventory_current_user'
-};
+const STORAGE_USERS_KEY = 'app_inventory_users';
+const STORAGE_CURRENT_USER_KEY = 'app_inventory_current_user';
 
 const AuthModule = {
-  hasRegisteredUsers() {
-    const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
-    return users.length > 0;
+  usersCache: null,
+
+  async fetchUsersFromAPI() {
+    try {
+      const res = await fetch('/api/auth/users');
+      const data = await res.json();
+      if (data.success) {
+        this.usersCache = data.users;
+        localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(data.users));
+        return data.users;
+      }
+    } catch (e) {
+      console.warn('API SQLite indisponível. Utilizando armazenamento local.');
+    }
+    const stored = localStorage.getItem(STORAGE_USERS_KEY);
+    this.usersCache = stored ? JSON.parse(stored) : [];
+    return this.usersCache;
   },
 
   getUsers() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+    if (this.usersCache) return this.usersCache;
+    const stored = localStorage.getItem(STORAGE_USERS_KEY);
+    return stored ? JSON.parse(stored) : [];
   },
 
-  getCurrentUser() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || 'null');
+  hasRegisteredUsers() {
+    const users = this.getUsers();
+    return users && users.length > 0;
   },
 
-  /**
-   * Verifica se o usuário logado possui determinada permissão
-   * @param {'canCreate' | 'canEdit' | 'canDelete' | 'isAdmin'} permissionKey 
-   */
-  hasPermission(permissionKey) {
-    const user = this.getCurrentUser();
-    if (!user) return false;
-    if (user.role === 'ADMIN' || user.permissions?.isAdmin) return true;
-    return !!(user.permissions && user.permissions[permissionKey]);
-  },
-
-  /**
-   * Cadastra o Administrador Mestre Inicial no Primeiro Acesso
-   */
-  registerMasterUser(fullname, username, password) {
-    if (this.hasRegisteredUsers()) {
-      return { success: false, message: 'O usuário mestre já foi cadastrado anteriormente.' };
+  async registerMasterUserAsync(fullname, username, password) {
+    try {
+      const res = await fetch('/api/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullname, username, password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(data.user));
+        await this.fetchUsersFromAPI();
+        return { success: true, user: data.user };
+      } else {
+        return { success: false, message: data.message };
+      }
+    } catch (e) {
+      return this.registerMasterUser(fullname, username, password);
     }
+  },
 
-    const newUser = {
-      id: 'usr_master_' + Date.now(),
+  registerMasterUser(fullname, username, password) {
+    const masterUser = {
+      id: 'usr_' + Date.now(),
       fullname: fullname.trim(),
       username: username.trim().toLowerCase(),
       password: password,
       role: 'ADMIN',
-      permissions: {
-        canCreate: true,
-        canEdit: true,
-        canDelete: true,
-        isAdmin: true
-      },
+      permissions: { canCreate: true, canEdit: true, canDelete: true, isAdmin: true },
       createdAt: new Date().toISOString()
     };
 
-    const users = [newUser];
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-    this.createSession(newUser);
+    const users = [masterUser];
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
+    localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(masterUser));
+    this.usersCache = users;
 
-    if (typeof LoggerModule !== 'undefined') {
-      LoggerModule.info('CADASTRO_ADMIN_INICIAL', `Administrador inicial "${newUser.fullname}" (@${newUser.username}) cadastrado.`);
-    }
-
-    return { success: true, user: newUser };
+    return { success: true, user: masterUser };
   },
 
-  /**
-   * Cria ou edita um usuário no sistema (Disponível para Admins)
-   */
-  saveUser(userData, userId = null) {
+  async loginAsync(username, password) {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(data.user));
+        return { success: true, user: data.user };
+      } else {
+        return { success: false, message: data.message };
+      }
+    } catch (e) {
+      return this.login(username, password);
+    }
+  },
+
+  login(username, password) {
     const users = this.getUsers();
+    const user = users.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
 
-    if (userId) {
-      // Edição
-      const index = users.findIndex(u => u.id === userId);
-      if (index === -1) return { success: false, message: 'Usuário não encontrado.' };
+    if (!user) return { success: false, message: 'Usuário não encontrado.' };
+    if (user.password !== password) return { success: false, message: 'Senha incorreta.' };
 
-      users[index] = {
-        ...users[index],
-        fullname: userData.fullname.trim(),
-        username: userData.username.trim().toLowerCase(),
-        password: userData.password ? userData.password : users[index].password,
-        role: userData.permissions.isAdmin ? 'ADMIN' : 'USER',
-        permissions: userData.permissions,
-        updatedAt: new Date().toISOString()
-      };
+    localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(user));
+    return { success: true, user };
+  },
 
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  logout() {
+    localStorage.removeItem(STORAGE_CURRENT_USER_KEY);
+  },
 
-      if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.modification('EDITAR_USUARIO', `Usuário "${userData.fullname}" (@${userData.username}) atualizado.`);
+  getCurrentUser() {
+    const stored = localStorage.getItem(STORAGE_CURRENT_USER_KEY);
+    return stored ? JSON.parse(stored) : null;
+  },
+
+  hasPermission(permissionKey) {
+    const currentUser = this.getCurrentUser();
+    if (!currentUser) return false;
+    if (currentUser.role === 'ADMIN' || (currentUser.permissions && currentUser.permissions.isAdmin)) return true;
+    return !!(currentUser.permissions && currentUser.permissions[permissionKey]);
+  },
+
+  async saveUserAsync(userData, editingUserId = null) {
+    try {
+      const res = await fetch('/api/auth/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...userData, id: editingUserId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        await this.fetchUsersFromAPI();
+        return { success: true };
+      } else {
+        return { success: false, message: data.message };
       }
+    } catch (e) {
+      return this.saveUser(userData, editingUserId);
+    }
+  },
 
-      return { success: true, user: users[index] };
+  saveUser(userData, editingUserId = null) {
+    let users = this.getUsers();
+    const cleanUsername = userData.username.trim().toLowerCase();
+
+    if (editingUserId) {
+      const existing = users.find(u => u.username.toLowerCase() === cleanUsername && u.id !== editingUserId);
+      if (existing) return { success: false, message: 'Nome de usuário já está em uso.' };
+
+      users = users.map(u => {
+        if (u.id === editingUserId) {
+          return {
+            ...u,
+            fullname: userData.fullname.trim(),
+            username: cleanUsername,
+            password: userData.password ? userData.password : u.password,
+            permissions: userData.permissions,
+            role: userData.permissions.isAdmin ? 'ADMIN' : 'USER'
+          };
+        }
+        return u;
+      });
     } else {
-      // Cadastro de Novo Usuário
-      const cleanUsername = userData.username.trim().toLowerCase();
-      if (users.some(u => u.username === cleanUsername)) {
-        return { success: false, message: 'Este nome de usuário já está em uso.' };
-      }
+      const existing = users.find(u => u.username.toLowerCase() === cleanUsername);
+      if (existing) return { success: false, message: 'Nome de usuário já existe.' };
 
       const newUser = {
         id: 'usr_' + Date.now(),
@@ -111,80 +175,34 @@ const AuthModule = {
         permissions: userData.permissions,
         createdAt: new Date().toISOString()
       };
-
-      users.push(newUser);
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-
-      if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.modification('CADASTRAR_USUARIO', `Novo usuário "${newUser.fullname}" (@${newUser.username}) cadastrado.`);
-      }
-
-      return { success: true, user: newUser };
-    }
-  },
-
-  /**
-   * Remove um usuário
-   */
-  deleteUser(userId) {
-    const currentUser = this.getCurrentUser();
-    if (currentUser && currentUser.id === userId) {
-      return { success: false, message: 'Você não pode excluir o seu próprio usuário conectado.' };
+      users.unshift(newUser);
     }
 
-    let users = this.getUsers();
-    const userToDelete = users.find(u => u.id === userId);
-    if (!userToDelete) return { success: false, message: 'Usuário não encontrado.' };
-
-    users = users.filter(u => u.id !== userId);
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-
-    if (typeof LoggerModule !== 'undefined') {
-      LoggerModule.modification('EXCLUIR_USUARIO', `Usuário "${userToDelete.fullname}" (@${userToDelete.username}) foi removido.`);
-    }
-
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
+    this.usersCache = users;
     return { success: true };
   },
 
-  login(username, password) {
-    const users = this.getUsers();
-    const cleanUsername = username.trim().toLowerCase();
-
-    const user = users.find(u => u.username === cleanUsername && u.password === password);
-
-    if (user) {
-      this.createSession(user);
-
-      if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.info('LOGIN_SUCESSO', `Usuário "${user.fullname}" (@${user.username}) efetuou login.`);
+  async deleteUserAsync(userId) {
+    try {
+      const res = await fetch(`/api/auth/users/${userId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await this.fetchUsersFromAPI();
+        return { success: true };
+      } else {
+        return { success: false, message: data.message };
       }
-
-      return { success: true, user };
-    } else {
-      if (typeof LoggerModule !== 'undefined') {
-        LoggerModule.error('LOGIN_FALHA', `Tentativa de login frustrada para "@${cleanUsername}".`);
-      }
-      return { success: false, message: 'Usuário ou senha incorretos.' };
+    } catch (e) {
+      return this.deleteUser(userId);
     }
   },
 
-  createSession(user) {
-    const sessionData = {
-      id: user.id,
-      fullname: user.fullname,
-      username: user.username,
-      role: user.role,
-      permissions: user.permissions || { canCreate: true, canEdit: true, canDelete: true, isAdmin: user.role === 'ADMIN' },
-      loggedAt: new Date().toISOString()
-    };
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(sessionData));
-  },
-
-  logout() {
-    const user = this.getCurrentUser();
-    if (user && typeof LoggerModule !== 'undefined') {
-      LoggerModule.info('LOGOUT', `Usuário "${user.fullname}" encerrou a sessão.`);
-    }
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+  deleteUser(userId) {
+    let users = this.getUsers();
+    users = users.filter(u => u.id !== userId);
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
+    this.usersCache = users;
+    return { success: true };
   }
 };

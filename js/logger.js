@@ -1,133 +1,102 @@
 /**
- * MÓDULO DE LOGS, AUDITORIA E CAPTURA DE ERROS
- * Registra modificações de inventário, acessos e captura erros em tempo de execução.
+ * MÓDULO DE LOGS E AUDITORIA - ELETRO ZONE
+ * Persiste registros de alteração e erros no banco de dados SQLite / API REST.
  */
 
 const STORAGE_LOGS_KEY = 'app_inventory_logs';
 
 const LoggerModule = {
-  /**
-   * Inicializa o módulo e instala capturadores globais de erros
-   */
-  init() {
-    this.setupGlobalErrorCatchers();
-  },
+  async logAsync(type, action, description, details = null) {
+    const currentUser = AuthModule.getCurrentUser();
+    const username = currentUser ? currentUser.username : 'Sistema';
 
-  /**
-   * Obtém a lista de logs ordenados do mais recente para o mais antigo
-   */
-  getLogs() {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_LOGS_KEY) || '[]');
+      await fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, action, user: username, description })
+      });
     } catch (e) {
-      console.error('Erro ao ler logs do localStorage:', e);
-      return [];
+      console.warn('Servidor SQLite offline. Salvando log localmente.');
     }
-  },
 
-  /**
-   * Adiciona um novo registro de log
-   * @param {'INFO' | 'MODIFICATION' | 'ERROR'} type Tipo do registro
-   * @param {string} action Ação executada (ex: "CADASTRAR_EQUIPAMENTO", "LOGIN")
-   * @param {string} description Descrição detalhada amigável
-   * @param {object|null} details Dados adicionais/metadata
-   */
-  addLog(type, action, description, details = null) {
-    const logs = this.getLogs();
-    const currentUser = (typeof AuthModule !== 'undefined' && AuthModule.getCurrentUser) 
-      ? AuthModule.getCurrentUser() 
-      : null;
-
-    const newLog = {
-      id: 'log_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    const logEntry = {
+      id: 'log_' + Date.now(),
       timestamp: new Date().toISOString(),
-      type: type || 'INFO',
-      action: action || 'ACAO_DESCONHECIDA',
-      description: description || '',
-      user: currentUser ? `${currentUser.fullname} (@${currentUser.username})` : 'Sistema / Visitante',
-      details: details ? JSON.stringify(details) : null
+      type: type,
+      action: action,
+      user: username,
+      description: description,
+      details: details
     };
 
-    // Limita a 500 registros para evitar estourar o localStorage
-    logs.unshift(newLog);
-    if (logs.length > 500) {
-      logs.pop();
-    }
+    const logs = this.getLogs();
+    logs.unshift(logEntry);
+    if (logs.length > 500) logs.pop();
+    localStorage.setItem(STORAGE_LOGS_KEY, JSON.stringify(logs));
 
-    try {
-      localStorage.setItem(STORAGE_LOGS_KEY, JSON.stringify(logs));
-    } catch (e) {
-      console.error('Erro ao salvar log:', e);
-    }
-
-    return newLog;
+    return logEntry;
   },
 
-  /**
-   * Atalhos específicos para facilidade de uso
-   */
   info(action, description, details = null) {
-    return this.addLog('INFO', action, description, details);
+    return this.logAsync('INFO', action, description, details);
   },
 
   modification(action, description, details = null) {
-    return this.addLog('MODIFICATION', action, description, details);
+    return this.logAsync('MODIFICATION', action, description, details);
   },
 
-  error(action, description, details = null) {
-    return this.addLog('ERROR', action, description, details);
+  error(action, description, errorObj = null) {
+    const details = errorObj ? { message: errorObj.message, stack: errorObj.stack } : null;
+    return this.logAsync('ERROR', action, description, details);
   },
 
-  /**
-   * Captura erros globais de runtime do navegador
-   */
-  setupGlobalErrorCatchers() {
-    window.addEventListener('error', (event) => {
-      const errorMsg = event.message || 'Erro de Execução Desconhecido';
-      const errorSource = `${event.filename || 'script'}:${event.lineno || 0}:${event.colno || 0}`;
-      this.error(
-        'ERRO_RUNTIME_JS',
-        `Erro de JavaScript detectado: ${errorMsg}`,
-        { source: errorSource, stack: event.error ? event.error.stack : null }
-      );
-    });
-
-    window.addEventListener('unhandledrejection', (event) => {
-      const reason = event.reason ? (event.reason.message || String(event.reason)) : 'Promise rejeitada';
-      this.error(
-        'PROMISE_REJEITADA',
-        `Promessa não tratada rejeitada: ${reason}`,
-        { reason }
-      );
-    });
+  getLogs() {
+    const stored = localStorage.getItem(STORAGE_LOGS_KEY);
+    return stored ? JSON.parse(stored) : [];
   },
 
-  /**
-   * Limpa todo o histórico de logs
-   */
+  async getLogsAsync() {
+    try {
+      const res = await fetch('/api/logs');
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem(STORAGE_LOGS_KEY, JSON.stringify(data.logs));
+        return data.logs;
+      }
+    } catch (e) {
+      console.warn('API SQLite inacessível.');
+    }
+    return this.getLogs();
+  },
+
+  async clearLogsAsync() {
+    try {
+      await fetch('/api/logs', { method: 'DELETE' });
+    } catch (e) {
+      console.warn('Erro ao deletar logs via API:', e);
+    }
+    localStorage.removeItem(STORAGE_LOGS_KEY);
+  },
+
   clearLogs() {
     localStorage.removeItem(STORAGE_LOGS_KEY);
-    this.info('LIMPEZA_LOGS', 'O histórico de logs foi limpo pelo administrador.');
   },
 
-  /**
-   * Exporta o log em formato CSV
-   */
   exportLogsCSV() {
     const logs = this.getLogs();
     if (logs.length === 0) {
-      alert('Não há registros de logs para exportar.');
+      alert('Não há logs registrados para exportar.');
       return;
     }
 
-    const headers = ['DATA_HORA', 'TIPO', 'ACAO', 'USUARIO', 'DESCRICAO', 'DETALHES'];
+    const headers = ['TIMESTAMP', 'TIPO', 'ACAO', 'USUARIO', 'DESCRICAO'];
     const rows = logs.map(l => [
-      `"${new Date(l.timestamp).toLocaleString('pt-BR')}"`,
+      `"${l.timestamp}"`,
       `"${l.type}"`,
       `"${l.action}"`,
       `"${l.user}"`,
-      `"${l.description.replace(/"/g, '""')}"`,
-      `"${(l.details || '').replace(/"/g, '""')}"`
+      `"${l.description.replace(/"/g, '""')}"`
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
@@ -135,11 +104,20 @@ const LoggerModule = {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `log_modificacoes_erros_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `logs_auditoria_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
 };
 
-// Inicialização automática
-LoggerModule.init();
+window.addEventListener('error', (event) => {
+  if (typeof LoggerModule !== 'undefined') {
+    LoggerModule.error('ERRO_JAVASCRIPT_RUNTIME', `Erro global: ${event.message} em ${event.filename}:${event.lineno}`, event.error);
+  }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  if (typeof LoggerModule !== 'undefined') {
+    LoggerModule.error('PROMISE_NAO_TRATADA', `Rejeição assíncrona: ${event.reason}`, event.reason);
+  }
+});
