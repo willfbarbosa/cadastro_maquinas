@@ -26,13 +26,19 @@ if (TURSO_URL) {
   sqliteDb = new sqlite3.Database(DB_PATH);
 }
 
+// Sanitizador para converter undefined em null antes de passar ao banco (evita erros no @libsql/client)
+const sanitizeParams = (params = []) => {
+  return params.map(p => (p === undefined ? null : p));
+};
+
 // Wrappers assíncronos compatíveis com Turso Cloud e SQLite Local
 const dbRun = async (sql, params = []) => {
+  const args = sanitizeParams(params);
   if (tursoClient) {
-    return await tursoClient.execute({ sql, args: params });
+    return await tursoClient.execute({ sql, args });
   } else {
     return new Promise((resolve, reject) => {
-      sqliteDb.run(sql, params, function (err) {
+      sqliteDb.run(sql, args, function (err) {
         if (err) reject(err);
         else resolve(this);
       });
@@ -41,12 +47,13 @@ const dbRun = async (sql, params = []) => {
 };
 
 const dbAll = async (sql, params = []) => {
+  const args = sanitizeParams(params);
   if (tursoClient) {
-    const res = await tursoClient.execute({ sql, args: params });
+    const res = await tursoClient.execute({ sql, args });
     return res.rows.map(row => (typeof row === 'object' && row !== null ? { ...row } : row));
   } else {
     return new Promise((resolve, reject) => {
-      sqliteDb.all(sql, params, (err, rows) => {
+      sqliteDb.all(sql, args, (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
@@ -55,14 +62,15 @@ const dbAll = async (sql, params = []) => {
 };
 
 const dbGet = async (sql, params = []) => {
+  const args = sanitizeParams(params);
   if (tursoClient) {
-    const res = await tursoClient.execute({ sql, args: params });
+    const res = await tursoClient.execute({ sql, args });
     if (!res.rows || res.rows.length === 0) return null;
     const first = res.rows[0];
     return typeof first === 'object' && first !== null ? { ...first } : first;
   } else {
     return new Promise((resolve, reject) => {
-      sqliteDb.get(sql, params, (err, row) => {
+      sqliteDb.get(sql, args, (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });

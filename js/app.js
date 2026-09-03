@@ -760,15 +760,16 @@ const App = {
   async saveDeviceForm(e) {
     e.preventDefault();
 
+    const id = this.editingId || ('eq_' + Date.now());
     const deviceData = {
-      id: this.editingId,
+      id: id,
       tipo: document.getElementById('field-tipo').value,
       host: document.getElementById('field-host').value.trim(),
       ip: document.getElementById('field-ip').value.trim(),
       anydesk: document.getElementById('field-anydesk').value.trim() || 'N/A',
       empresa: document.getElementById('field-empresa').value.trim() || 'Eletro Zone Matriz',
       status: document.getElementById('field-status').value,
-      nextPreventiveDate: document.getElementById('field-nextPreventiveDate').value,
+      nextPreventiveDate: document.getElementById('field-nextPreventiveDate').value || '',
       setor: document.getElementById('field-setor').value.trim(),
       usuario: document.getElementById('field-usuario').value.trim(),
       processador: document.getElementById('field-processador').value.trim() || 'N/A',
@@ -777,35 +778,35 @@ const App = {
       ns: document.getElementById('field-ns').value.trim(),
       marca: document.getElementById('field-marca').value.trim(),
       modelo: document.getElementById('field-modelo').value.trim(),
-      notaFiscal: document.getElementById('field-notaFiscal').value.trim(),
-      fornecedor: document.getElementById('field-fornecedor').value.trim()
+      notaFiscal: document.getElementById('field-notaFiscal').value.trim() || '',
+      fornecedor: document.getElementById('field-fornecedor').value.trim() || ''
     };
+
+    if (this.editingId) {
+      const idx = this.equipments.findIndex(item => item.id === this.editingId);
+      if (idx !== -1) {
+        this.equipments[idx] = { ...this.equipments[idx], ...deviceData };
+      }
+    } else {
+      this.equipments.unshift({ ...deviceData, maintenances: [], createdAt: new Date().toISOString() });
+    }
+    this.saveEquipmentsLocal();
+    this.filteredEquipments = [...this.equipments];
 
     try {
       const url = this.editingId ? `/api/equipments/${this.editingId}` : '/api/equipments';
       const method = this.editingId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      await fetch(url, {
         method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(deviceData)
       });
-      const data = await res.json();
-
-      if (data.success) {
-        this.showToast(this.editingId ? 'Equipamento atualizado com sucesso!' : 'Equipamento cadastrado com sucesso!', 'success');
-        if (typeof LoggerModule !== 'undefined') {
-          LoggerModule.modification(
-            this.editingId ? 'EDITAR_EQUIPAMENTO' : 'CADASTRAR_EQUIPAMENTO',
-            `Equipamento "${deviceData.host}" (IP: ${deviceData.ip}) salvo.`
-          );
-        }
-      }
     } catch (err) {
-      console.warn('Erro na requisição SQLite:', err);
+      console.warn('Erro na requisição API de equipamento:', err);
     }
 
-    await this.loadEquipments();
+    this.showToast(this.editingId ? 'Equipamento atualizado com sucesso!' : 'Equipamento cadastrado com sucesso!', 'success');
     this.closeFormModal();
     this.renderAll();
   },
@@ -919,14 +920,17 @@ const App = {
     if (!item) return;
 
     if (confirm(`Deseja realmente excluir o equipamento "${item.host}" (IP: ${item.ip})?`)) {
+      this.equipments = this.equipments.filter(e => e.id !== id);
+      this.filteredEquipments = [...this.equipments];
+      this.saveEquipmentsLocal();
+      this.renderAll();
+
       try {
         await fetch(`/api/equipments/${id}`, { method: 'DELETE' });
       } catch (err) {
         console.warn('Erro ao deletar equipamento via API:', err);
       }
 
-      await this.loadEquipments();
-      this.renderAll();
       this.showToast('Equipamento excluído com sucesso.', 'info');
     }
   },
