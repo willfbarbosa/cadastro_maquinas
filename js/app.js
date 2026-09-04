@@ -2451,14 +2451,15 @@ const App = {
   },
 
   openContractModal(contractId = null) {
-    if (!AuthModule.hasPermission('canCreate') && !contractId) {
-      this.showToast('Você não possui permissão para cadastrar contratos.', 'error');
-      return;
-    }
-
     this.editingContractId = contractId;
+    const modal = document.getElementById('contract-modal');
     const form = document.getElementById('contract-form');
     const titleEl = document.getElementById('contract-modal-title');
+
+    if (!modal) {
+      console.error('Modal contract-modal não foi encontrado no DOM.');
+      return;
+    }
 
     if (form) form.reset();
 
@@ -2503,12 +2504,7 @@ const App = {
     }
 
     this.calculateContractTotal();
-    const modal = document.getElementById('contract-modal');
-    if (modal) {
-      modal.classList.add('active');
-    } else {
-      console.error('Modal contract-modal não encontrado no DOM!');
-    }
+    modal.classList.add('active');
   },
 
   closeContractModal() {
@@ -2952,6 +2948,8 @@ const App = {
     document.getElementById('order-filter-status').addEventListener('change', () => this.renderOrdersAll());
 
     // Eventos Contratos Mensais
+    const btnOpenCtr = document.getElementById('btn-open-contract-modal');
+    if (btnOpenCtr) btnOpenCtr.addEventListener('click', () => this.openContractModal());
     const ctrForm = document.getElementById('contract-form');
     if (ctrForm) ctrForm.addEventListener('submit', (e) => this.saveContract(e));
     const ctrSearch = document.getElementById('contract-search-input');
