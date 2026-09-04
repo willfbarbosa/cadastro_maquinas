@@ -215,6 +215,8 @@ async function initDatabase() {
       id TEXT PRIMARY KEY,
       clientName TEXT NOT NULL,
       clientContact TEXT,
+      startDate TEXT,
+      endDate TEXT,
       monthlyValue REAL NOT NULL DEFAULT 0,
       dueDay INTEGER NOT NULL DEFAULT 10,
       extraValue REAL NOT NULL DEFAULT 0,
@@ -227,6 +229,9 @@ async function initDatabase() {
       updatedAt TEXT
     )
   `);
+
+  try { await dbRun(`ALTER TABLE contracts ADD COLUMN startDate TEXT`); } catch(e){}
+  try { await dbRun(`ALTER TABLE contracts ADD COLUMN endDate TEXT`); } catch(e){}
 
 
   await seedInitialData();

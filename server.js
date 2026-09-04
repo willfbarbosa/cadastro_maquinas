@@ -578,14 +578,25 @@ app.post('/api/contracts', async (req, res) => {
     const monthlyValue = parseFloat(data.monthlyValue) || 0;
     const dueDay = parseInt(data.dueDay) || 10;
     const extraValue = parseFloat(data.extraValue) || 0;
+    const startDate = data.startDate || new Date().toISOString().split('T')[0];
+    
+    // Default 1 ano após a data de início se não especificado
+    let endDate = data.endDate;
+    if (!endDate && startDate) {
+      const d = new Date(startDate);
+      d.setFullYear(d.getFullYear() + 1);
+      endDate = d.toISOString().split('T')[0];
+    }
 
     await dbRun(
-      `INSERT INTO contracts (id, clientName, clientContact, monthlyValue, dueDay, extraValue, extraDescription, status, paymentMethod, notes, lastPaymentDate, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO contracts (id, clientName, clientContact, startDate, endDate, monthlyValue, dueDay, extraValue, extraDescription, status, paymentMethod, notes, lastPaymentDate, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.clientName,
         data.clientContact || '',
+        startDate,
+        endDate || '',
         monthlyValue,
         dueDay,
         extraValue,
@@ -625,13 +636,22 @@ app.put('/api/contracts/:id', async (req, res) => {
     const monthlyValue = parseFloat(data.monthlyValue) || 0;
     const dueDay = parseInt(data.dueDay) || 10;
     const extraValue = parseFloat(data.extraValue) || 0;
+    const startDate = data.startDate || new Date().toISOString().split('T')[0];
+    let endDate = data.endDate;
+    if (!endDate && startDate) {
+      const d = new Date(startDate);
+      d.setFullYear(d.getFullYear() + 1);
+      endDate = d.toISOString().split('T')[0];
+    }
 
     await dbRun(
-      `UPDATE contracts SET clientName = ?, clientContact = ?, monthlyValue = ?, dueDay = ?, extraValue = ?, extraDescription = ?, status = ?, paymentMethod = ?, notes = ?, updatedAt = ?
+      `UPDATE contracts SET clientName = ?, clientContact = ?, startDate = ?, endDate = ?, monthlyValue = ?, dueDay = ?, extraValue = ?, extraDescription = ?, status = ?, paymentMethod = ?, notes = ?, updatedAt = ?
        WHERE id = ?`,
       [
         data.clientName,
         data.clientContact || '',
+        startDate,
+        endDate || '',
         monthlyValue,
         dueDay,
         extraValue,

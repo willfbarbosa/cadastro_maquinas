@@ -1631,15 +1631,49 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="ctr-field-due-day">Dia de Vencimento Mensal *</label>
+              <label class="form-label" for="ctr-field-start-date">Data de Início do Contrato *</label>
+              <input type="date" id="ctr-field-start-date" class="form-control" required onchange="App.handleContractStartDateChange()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-end-date">Validade Anual (Término) *</label>
+              <input type="date" id="ctr-field-end-date" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-due-day">Dia do Vencimento Mensal Escolhido *</label>
               <select id="ctr-field-due-day" class="form-control" required>
                 <option value="1">Dia 01</option>
+                <option value="2">Dia 02</option>
+                <option value="3">Dia 03</option>
+                <option value="4">Dia 04</option>
                 <option value="5">Dia 05</option>
+                <option value="6">Dia 06</option>
+                <option value="7">Dia 07</option>
+                <option value="8">Dia 08</option>
+                <option value="9">Dia 09</option>
                 <option value="10" selected>Dia 10</option>
+                <option value="11">Dia 11</option>
+                <option value="12">Dia 12</option>
+                <option value="13">Dia 13</option>
+                <option value="14">Dia 14</option>
                 <option value="15">Dia 15</option>
+                <option value="16">Dia 16</option>
+                <option value="17">Dia 17</option>
+                <option value="18">Dia 18</option>
+                <option value="19">Dia 19</option>
                 <option value="20">Dia 20</option>
+                <option value="21">Dia 21</option>
+                <option value="22">Dia 22</option>
+                <option value="23">Dia 23</option>
+                <option value="24">Dia 24</option>
                 <option value="25">Dia 25</option>
+                <option value="26">Dia 26</option>
+                <option value="27">Dia 27</option>
+                <option value="28">Dia 28</option>
+                <option value="29">Dia 29</option>
                 <option value="30">Dia 30</option>
+                <option value="31">Dia 31</option>
               </select>
             </div>
 
@@ -1705,8 +1739,8 @@
 
 
   <!-- SCRIPTS JS -->
-  <script src="js/logger.js?v=20260904_3"></script>
-  <script src="js/auth.js?v=20260904_3"></script>
-  <script src="js/app.js?v=20260904_3"></script>
+  <script src="js/logger.js?v=20260904_4"></script>
+  <script src="js/auth.js?v=20260904_4"></script>
+  <script src="js/app.js?v=20260904_4"></script>
 </body>
 </html>

@@ -2455,22 +2455,41 @@ const App = {
     localStorage.setItem(STORAGE_CONTRACTS_KEY, JSON.stringify(this.contracts));
   },
 
+  handleContractStartDateChange() {
+    const startVal = document.getElementById('ctr-field-start-date')?.value;
+    if (startVal) {
+      const startDate = new Date(startVal + 'T00:00:00');
+      if (!isNaN(startDate.getTime())) {
+        startDate.setFullYear(startDate.getFullYear() + 1);
+        const endVal = startDate.toISOString().split('T')[0];
+        const endEl = document.getElementById('ctr-field-end-date');
+        if (endEl) endEl.value = endVal;
+      }
+    }
+  },
+
+  formatDateBR(dateStr) {
+    if (!dateStr) return '-';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return dateStr;
+  },
+
   openContractModal(contractId = null) {
     this.editingContractId = contractId;
     const modal = document.getElementById('contract-modal');
     const form = document.getElementById('contract-form');
     const titleEl = document.getElementById('contract-modal-title');
 
-    if (!modal) {
-      console.error('Modal contract-modal não foi encontrado no DOM.');
-      return;
-    }
+    if (!modal) return;
 
     if (form) form.reset();
 
     const idEl = document.getElementById('ctr-field-id');
     const nameEl = document.getElementById('ctr-field-client-name');
     const contactEl = document.getElementById('ctr-field-client-contact');
+    const startEl = document.getElementById('ctr-field-start-date');
+    const endEl = document.getElementById('ctr-field-end-date');
     const dueDayEl = document.getElementById('ctr-field-due-day');
     const monthlyEl = document.getElementById('ctr-field-monthly-value');
     const extraValEl = document.getElementById('ctr-field-extra-value');
@@ -2479,6 +2498,11 @@ const App = {
     const statusEl = document.getElementById('ctr-field-status');
     const notesEl = document.getElementById('ctr-field-notes');
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const defaultEnd = new Date();
+    defaultEnd.setFullYear(defaultEnd.getFullYear() + 1);
+    const defaultEndStr = defaultEnd.toISOString().split('T')[0];
+
     if (contractId) {
       const ctr = this.contracts.find(c => c.id == contractId);
       if (ctr) {
@@ -2486,6 +2510,8 @@ const App = {
         if (idEl) idEl.value = ctr.id;
         if (nameEl) nameEl.value = ctr.clientName || '';
         if (contactEl) contactEl.value = ctr.clientContact || '';
+        if (startEl) startEl.value = ctr.startDate || todayStr;
+        if (endEl) endEl.value = ctr.endDate || defaultEndStr;
         if (dueDayEl) dueDayEl.value = ctr.dueDay || 10;
         if (monthlyEl) monthlyEl.value = ctr.monthlyValue || 0;
         if (extraValEl) extraValEl.value = ctr.extraValue || 0;
@@ -2495,10 +2521,12 @@ const App = {
         if (notesEl) notesEl.value = ctr.notes || '';
       }
     } else {
-      if (titleEl) titleEl.innerText = 'Novo Contrato Mensal';
+      if (titleEl) titleEl.innerText = 'Novo Contrato Mensal (Validade 1 Ano)';
       if (idEl) idEl.value = '';
       if (nameEl) nameEl.value = '';
       if (contactEl) contactEl.value = '';
+      if (startEl) startEl.value = todayStr;
+      if (endEl) endEl.value = defaultEndStr;
       if (dueDayEl) dueDayEl.value = '10';
       if (monthlyEl) monthlyEl.value = '';
       if (extraValEl) extraValEl.value = '0.00';
@@ -2534,6 +2562,8 @@ const App = {
     const id = document.getElementById('ctr-field-id').value;
     const clientName = document.getElementById('ctr-field-client-name').value.trim();
     const clientContact = document.getElementById('ctr-field-client-contact').value.trim();
+    const startDate = document.getElementById('ctr-field-start-date').value || new Date().toISOString().split('T')[0];
+    const endDate = document.getElementById('ctr-field-end-date').value || '';
     const dueDay = parseInt(document.getElementById('ctr-field-due-day').value) || 10;
     const monthlyValue = parseFloat(document.getElementById('ctr-field-monthly-value').value) || 0;
     const extraValue = parseFloat(document.getElementById('ctr-field-extra-value').value) || 0;
@@ -2547,9 +2577,14 @@ const App = {
       return;
     }
 
+    const submitBtn = e.target ? e.target.querySelector('button[type="submit"]') : null;
+    if (submitBtn) submitBtn.disabled = true;
+
     const payload = {
       clientName,
       clientContact,
+      startDate,
+      endDate,
       dueDay,
       monthlyValue,
       extraValue,
@@ -2580,11 +2615,16 @@ const App = {
         this.closeContractModal();
         await this.loadContracts();
         await this.loadCashbook();
+        // Reset status filter to empty so all contracts are visible
+        const filterSelect = document.getElementById('contract-filter-status');
+        if (filterSelect) filterSelect.value = '';
         this.renderContractsAll();
         return;
       }
     } catch (err) {
       console.error('Erro ao salvar no servidor:', err);
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
 
     // Fallback local
@@ -2629,6 +2669,8 @@ const App = {
 
     this.saveContractsLocal();
     this.closeContractModal();
+    const filterSelect = document.getElementById('contract-filter-status');
+    if (filterSelect) filterSelect.value = '';
     this.renderContractsAll();
     this.showToast('Contrato salvo localmente.', 'success');
   },
@@ -2778,7 +2820,7 @@ const App = {
     if (this.filteredContracts.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+          <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">
             Nenhum contrato mensal encontrado.
           </td>
         </tr>
@@ -2792,6 +2834,17 @@ const App = {
       const monthly = parseFloat(c.monthlyValue) || 0;
       const extra = parseFloat(c.extraValue) || 0;
       const totalMonth = monthly + extra;
+
+      const startFormatted = this.formatDateBR(c.startDate);
+      const endFormatted = this.formatDateBR(c.endDate);
+
+      let validityHtml = '-';
+      if (startFormatted !== '-' || endFormatted !== '-') {
+        validityHtml = `
+          <div style="font-size: 0.85rem; font-weight: 500;">📅 ${startFormatted} a ${endFormatted}</div>
+          <div style="font-size: 0.72rem; color: #10b981; font-weight: 600;">Validade Anual (12 Meses)</div>
+        `;
+      }
 
       let statusBadge = '';
       if (c.status === 'PAGO') {
@@ -2817,7 +2870,8 @@ const App = {
             <strong>${this.escapeHtml(c.clientName || 'N/A')}</strong>
           </td>
           <td>${this.escapeHtml(c.clientContact || '-')}</td>
-          <td><span class="badge" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color);">Dia ${c.dueDay || 10}</span></td>
+          <td>${validityHtml}</td>
+          <td><span class="badge" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); font-weight: 600;">Dia ${c.dueDay || 10}</span></td>
           <td><strong>${this.formatCurrency(monthly)}</strong></td>
           <td>${extra > 0 ? `<span style="color: #10b981; font-weight: 600;">+ ${this.formatCurrency(extra)}</span>` : '-'}</td>
           <td><strong style="color: #3b82f6;">${this.formatCurrency(totalMonth)}</strong></td>
@@ -2847,12 +2901,14 @@ const App = {
       return;
     }
 
-    const headers = ['ID', 'Cliente', 'Contato', 'Dia Vencimento', 'Valor Mensal (R$)', 'Extras Mes (R$)', 'Descricao Extras', 'Forma Pagamento', 'Status', 'Observacoes', 'Ultimo Pagamento'];
+    const headers = ['ID', 'Cliente', 'Contato', 'Data Inicio', 'Validade Anual (Termino)', 'Dia Vencimento Mensal', 'Valor Mensal (R$)', 'Extras Mes (R$)', 'Descricao Extras', 'Forma Pagamento', 'Status', 'Observacoes', 'Ultimo Pagamento'];
     
     const rows = this.contracts.map(c => [
       c.id,
       `"${(c.clientName || '').replace(/"/g, '""')}"`,
       `"${(c.clientContact || '').replace(/"/g, '""')}"`,
+      c.startDate || '',
+      c.endDate || '',
       c.dueDay,
       (c.monthlyValue || 0).toFixed(2),
       (c.extraValue || 0).toFixed(2),
