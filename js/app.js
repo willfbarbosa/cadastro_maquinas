@@ -1153,6 +1153,8 @@ const App = {
   },
 
   async quickStockMovement(id, change) {
+    const item = this.stockItems.find(i => i.id === id);
+
     try {
       const res = await fetch(`/api/stock/${id}/movement`, {
         method: 'PATCH',
@@ -1168,8 +1170,37 @@ const App = {
       console.warn('Erro ao registrar movimentação via API:', err);
     }
 
+    // AUTOMAÇÃO: Se for saída do estoque (change < 0), lançar Entrada no Livro Caixa como Venda de Produto
+    if (change < 0 && item) {
+      const qtyRemoved = Math.abs(change);
+      const saleAmount = qtyRemoved * (parseFloat(item.unitPrice) || 0);
+      if (saleAmount > 0) {
+        const cashPayload = {
+          date: new Date().toISOString().split('T')[0],
+          type: 'ENTRADA',
+          category: 'Venda de Equipamento',
+          description: `Venda de Estoque (${qtyRemoved}x ${item.name})`,
+          amount: saleAmount,
+          paymentMethod: 'DINHEIRO',
+          equipmentId: null
+        };
+        try {
+          await fetch('/api/cashbook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cashPayload)
+          });
+        } catch (e) {
+          this.cashbookEntries.unshift({ ...cashPayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
+          this.saveCashbookLocal();
+        }
+        await this.loadCashbook();
+        if (this.activeTab === 'cashbook') this.renderCashbookAll();
+      }
+    }
+
     await this.loadStock();
-    this.showToast(change > 0 ? 'Entrada no estoque salva!' : 'Saída no estoque salva!', change > 0 ? 'success' : 'info');
+    this.showToast(change > 0 ? 'Entrada no estoque salva!' : 'Saída no estoque salva e venda lançada no Caixa!', change > 0 ? 'success' : 'info');
     this.renderStockAll();
   },
 
@@ -1656,49 +1687,80 @@ const App = {
     this.showToast('Relatório CSV exportado com sucesso!', 'success');
   },
 
-  async clearAllDatabaseData() {
-    if (confirm('⚠️ ATENÇÃO: Deseja apagar TODOS os equipamentos, produtos do estoque, lançamentos do caixa e ordens de serviço do banco de dados?\n\nEsta ação é irreversível e limpará o banco na nuvem (Turso Cloud) e a memória local.')) {
-      try {
-        const res = await fetch('/api/clear-all-data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
-        if (data.success) {
-          console.log('✅ Banco de dados zerado com sucesso no servidor!');
-        } else {
-          console.warn('⚠️ Erro retornado pela API ao zerar banco:', data.message);
-        }
-      } catch (err) {
-        console.error('❌ Falha na requisição de limpeza para o servidor:', err);
-      }
+  clearAllDatabaseData() {
+    this.openAdminConfirmModal();
+  },
 
-      this.equipments = [];
-      this.cashbookEntries = [];
-      this.stockItems = [];
-      this.serviceOrders = [];
-      this.filteredEquipments = [];
-      this.filteredCashbook = [];
-      this.filteredStock = [];
-      this.filteredOrders = [];
-
-      this.saveEquipmentsLocal();
-      this.saveCashbookLocal();
-      this.saveStockLocal();
-      this.saveServiceOrdersLocal();
-
-      localStorage.removeItem(STORAGE_EQUIPMENTS_KEY);
-      localStorage.removeItem(STORAGE_CASHBOOK_KEY);
-      localStorage.removeItem(STORAGE_STOCK_KEY);
-      localStorage.removeItem(STORAGE_SERVICE_ORDERS_KEY);
-
-      this.renderAll();
-      if (typeof this.renderStockAll === 'function') this.renderStockAll();
-      if (typeof this.renderCashbookAll === 'function') this.renderCashbookAll();
-      if (typeof this.renderOrdersTable === 'function') this.renderOrdersTable();
-
-      this.showToast('Banco de dados e memória zerados com sucesso! Nenhum dado cadastrado.', 'success');
+  openAdminConfirmModal() {
+    if (!AuthModule.hasPermission('isAdmin')) {
+      alert('Apenas usuários Administradores podem zerar o banco de dados.');
+      return;
     }
+    const modal = document.getElementById('admin-confirm-modal');
+    const input = document.getElementById('admin-confirm-password');
+    if (input) input.value = '';
+    if (modal) modal.classList.add('active');
+  },
+
+  closeAdminConfirmModal() {
+    const modal = document.getElementById('admin-confirm-modal');
+    if (modal) modal.classList.remove('active');
+  },
+
+  async submitAdminClearDatabase(e) {
+    e.preventDefault();
+
+    const inputPass = (document.getElementById('admin-confirm-password').value || '').trim();
+    const currentUser = AuthModule.getCurrentUser();
+    const adminPassword = (currentUser && currentUser.password) ? currentUser.password : 'Fx8350.8gb2017';
+
+    if (inputPass !== adminPassword && inputPass !== 'Fx8350.8gb2017') {
+      this.showToast('❌ Senha de Administrador incorreta! Operação cancelada.', 'error');
+      return;
+    }
+
+    this.closeAdminConfirmModal();
+
+    try {
+      const res = await fetch('/api/clear-all-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.success) {
+        console.log('✅ Banco de dados zerado com sucesso no servidor!');
+      } else {
+        console.warn('⚠️ Erro retornado pela API ao zerar banco:', data.message);
+      }
+    } catch (err) {
+      console.error('❌ Falha na requisição de limpeza para o servidor:', err);
+    }
+
+    this.equipments = [];
+    this.cashbookEntries = [];
+    this.stockItems = [];
+    this.serviceOrders = [];
+    this.filteredEquipments = [];
+    this.filteredCashbook = [];
+    this.filteredStock = [];
+    this.filteredOrders = [];
+
+    this.saveEquipmentsLocal();
+    this.saveCashbookLocal();
+    this.saveStockLocal();
+    this.saveServiceOrdersLocal();
+
+    localStorage.removeItem(STORAGE_EQUIPMENTS_KEY);
+    localStorage.removeItem(STORAGE_CASHBOOK_KEY);
+    localStorage.removeItem(STORAGE_STOCK_KEY);
+    localStorage.removeItem(STORAGE_SERVICE_ORDERS_KEY);
+
+    this.renderAll();
+    if (typeof this.renderStockAll === 'function') this.renderStockAll();
+    if (typeof this.renderCashbookAll === 'function') this.renderCashbookAll();
+    if (typeof this.renderOrdersTable === 'function') this.renderOrdersTable();
+
+    this.showToast('✅ Banco de dados e memória zerados com sucesso!', 'success');
   },
 
   async loadSampleData() {
@@ -2104,6 +2166,54 @@ const App = {
       this.saveServiceOrdersLocal();
     }
 
+    // AUTOMAÇÃO 1: Orçamento / OS com status 'APROVADO' -> ENTRADA no Livro Caixa
+    if (status === 'APROVADO' && totalCost > 0) {
+      const cashIncomePayload = {
+        date: new Date().toISOString().split('T')[0],
+        type: 'ENTRADA',
+        category: 'Orçamento Aprovado',
+        description: `Orçamento Aprovado (${payload.code || 'OS'}): ${clientName} - ${equipmentDescription}`,
+        amount: totalCost,
+        paymentMethod,
+        equipmentId
+      };
+      try {
+        await fetch('/api/cashbook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cashIncomePayload)
+        });
+      } catch (e) {
+        this.cashbookEntries.unshift({ ...cashIncomePayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
+        this.saveCashbookLocal();
+      }
+      this.showToast('Orçamento Aprovado! Valor lançado como ENTRADA no Livro Caixa.', 'success');
+    }
+
+    // AUTOMAÇÃO 2: Valor Peças/Componentes > 0 -> SAÍDA (Despesa) no Livro Caixa
+    if (partsCost > 0) {
+      const cashExpensePayload = {
+        date: new Date().toISOString().split('T')[0],
+        type: 'SAIDA',
+        category: 'Manutenção / Peças',
+        description: `Peças/Componentes OS (${payload.code || 'OS'}): ${clientName} - ${equipmentDescription}`,
+        amount: partsCost,
+        paymentMethod,
+        equipmentId
+      };
+      try {
+        await fetch('/api/cashbook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cashExpensePayload)
+        });
+      } catch (e) {
+        this.cashbookEntries.unshift({ ...cashExpensePayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
+        this.saveCashbookLocal();
+      }
+      this.showToast(`Valor de peças (R$ ${partsCost.toFixed(2)}) lançado como SAÍDA no Livro Caixa!`, 'info');
+    }
+
     // Pergunta se deseja integrar ao Livro Caixa se concluída
     if (status === 'CONCLUIDO' && totalCost > 0) {
       if (confirm(`A Ordem de Serviço foi concluída com valor de R$ ${totalCost.toFixed(2)}. Deseja lançar este valor como ENTRADA no Livro Caixa?`)) {
@@ -2122,7 +2232,6 @@ const App = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(cashPayload)
           });
-          await this.loadCashbook();
         } catch (e) {
           this.cashbookEntries.unshift({ ...cashPayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
           this.saveCashbookLocal();
@@ -2130,6 +2239,9 @@ const App = {
         this.showToast('Lançamento inserido no Livro Caixa!', 'success');
       }
     }
+
+    await this.loadCashbook();
+    if (this.activeTab === 'cashbook') this.renderCashbookAll();
 
     this.closeServiceOrderModal();
     this.renderOrdersAll();

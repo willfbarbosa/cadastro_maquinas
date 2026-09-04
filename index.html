@@ -1448,8 +1448,45 @@
     </div>
   </div>
 
+  <!-- MODAL: CONFIRMAÇÃO DE SENHA PARA ZERAR BANCO DE DADOS -->
+  <div id="admin-confirm-modal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--status-danger);">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
+          Autenticação de Segurança
+        </h3>
+        <button class="modal-close-btn" onclick="App.closeAdminConfirmModal()">&times;</button>
+      </div>
+
+      <form id="admin-confirm-form" onsubmit="App.submitAdminClearDatabase(event)">
+        <div class="modal-body">
+          <p style="font-size: 0.875rem; color: var(--text-main); margin-bottom: 0.75rem; font-weight: 600;">
+            ⚠️ Você está prestes a zerar o banco de dados e apagar TODOS os equipamentos, estoque, caixa e OS.
+          </p>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Por segurança, digite a senha do Administrador Mestre para prosseguir:
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="admin-confirm-password">Senha de Administrador *</label>
+            <input type="password" id="admin-confirm-password" class="form-control" placeholder="Digite a senha de administrador..." required>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeAdminConfirmModal()">Cancelar</button>
+          <button type="submit" class="btn btn-danger">Confirmar e Zerar Banco</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- CONTAINER DE TOAST NOTIFICATIONS -->
   <div id="toast-container" class="toast-container"></div>
+
 
   <!-- SCRIPTS JS -->
   <script src="js/logger.js"></script>

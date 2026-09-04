@@ -298,13 +298,29 @@ app.put('/api/stock/:id', async (req, res) => {
 app.patch('/api/stock/:id/movement', async (req, res) => {
   try {
     const { change } = req.body;
-    const item = await dbGet('SELECT quantity FROM stock_items WHERE id = ?', [req.params.id]);
+    const item = await dbGet('SELECT * FROM stock_items WHERE id = ?', [req.params.id]);
     if (!item) return res.status(404).json({ success: false, message: 'Produto não encontrado.' });
 
     const newQty = item.quantity + change;
     if (newQty < 0) return res.status(400).json({ success: false, message: 'Quantidade não pode ser negativa.' });
 
     await dbRun('UPDATE stock_items SET quantity = ?, updatedAt = ? WHERE id = ?', [newQty, new Date().toISOString(), req.params.id]);
+
+    // AUTOMAÇÃO: Se for saída do estoque (change < 0), registra Entrada no Livro Caixa como Venda de Produto
+    if (change < 0) {
+      const qtyRemoved = Math.abs(change);
+      const saleAmount = qtyRemoved * (parseFloat(item.unitPrice) || 0);
+      if (saleAmount > 0) {
+        const cbId = 'cb_stk_' + Date.now();
+        const date = new Date().toISOString().split('T')[0];
+        await dbRun(
+          `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [cbId, date, 'ENTRADA', 'Venda de Equipamento', `Venda de Estoque (${qtyRemoved}x ${item.name})`, saleAmount, 'DINHEIRO', null, new Date().toISOString()]
+        );
+      }
+    }
+
     res.json({ success: true, newQty });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -319,6 +335,38 @@ app.delete('/api/stock/:id', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// Helper para sincronizar Orçamento / OS com o Livro Caixa
+async function syncOrderToCashbook(orderData) {
+  const { code, clientName, equipmentDescription, status, partsCost, totalCost, paymentMethod, equipmentId } = orderData;
+  const date = new Date().toISOString().split('T')[0];
+
+  // 1. Status === 'APROVADO' -> ENTRADA no Livro Caixa com valor total do orçamento
+  if (status === 'APROVADO' && totalCost > 0) {
+    const existing = await dbGet('SELECT id FROM cashbook WHERE type = "ENTRADA" AND description LIKE ?', [`%${code}%`]);
+    if (!existing) {
+      const cbId = 'cb_apv_' + Date.now();
+      await dbRun(
+        `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [cbId, date, 'ENTRADA', 'Orçamento Aprovado', `Orçamento Aprovado (${code}): ${clientName} - ${equipmentDescription || 'Serviços'}`, totalCost, paymentMethod || 'PIX', equipmentId || null, new Date().toISOString()]
+      );
+    }
+  }
+
+  // 2. Valor de Peças / Componentes -> SAÍDA (Despesa) no Livro Caixa
+  if (partsCost > 0) {
+    const existing = await dbGet('SELECT id FROM cashbook WHERE type = "SAIDA" AND description LIKE ?', [`%${code}%`]);
+    if (!existing) {
+      const cbId = 'cb_pts_' + Date.now();
+      await dbRun(
+        `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [cbId, date, 'SAIDA', 'Manutenção / Peças', `Peças/Componentes OS (${code}): ${clientName} - ${equipmentDescription || 'Manutenção'}`, partsCost, paymentMethod || 'PIX', equipmentId || null, new Date().toISOString()]
+      );
+    }
+  }
+}
 
 // ============================================================================
 // ROTAS DO LIVRO CAIXA
@@ -418,6 +466,18 @@ app.post('/api/service-orders', async (req, res) => {
       ]
     );
 
+    // Sync com o Livro Caixa
+    await syncOrderToCashbook({
+      code,
+      clientName: data.clientName,
+      equipmentDescription: data.equipmentDescription,
+      status: data.status,
+      partsCost,
+      totalCost,
+      paymentMethod: data.paymentMethod,
+      equipmentId: data.equipmentId
+    });
+
     res.json({ success: true, id, code });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -431,6 +491,9 @@ app.put('/api/service-orders/:id', async (req, res) => {
     const servicesCost = parseFloat(data.servicesCost) || 0;
     const partsCost = parseFloat(data.partsCost) || 0;
     const totalCost = servicesCost + partsCost;
+
+    const existingOrder = await dbGet('SELECT code FROM service_orders WHERE id = ?', [req.params.id]);
+    const code = (existingOrder && existingOrder.code) ? existingOrder.code : (data.code || req.params.id);
 
     await dbRun(
       `UPDATE service_orders SET type = ?, clientName = ?, clientContact = ?, equipmentId = ?, equipmentDescription = ?, status = ?, problemDescription = ?, technicalDiagnosis = ?, servicesCost = ?, partsCost = ?, totalCost = ?, paymentMethod = ?, technician = ?, validityDate = ?, completionDate = ?, updatedAt = ?
@@ -456,11 +519,26 @@ app.put('/api/service-orders/:id', async (req, res) => {
       ]
     );
 
+    // Sync com o Livro Caixa
+    await syncOrderToCashbook({
+      code,
+      clientName: data.clientName,
+      equipmentDescription: data.equipmentDescription,
+      status: data.status,
+      partsCost,
+      totalCost,
+      paymentMethod: data.paymentMethod,
+      equipmentId: data.equipmentId
+    });
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+
+
 
 app.patch('/api/service-orders/:id/convert', async (req, res) => {
   try {
