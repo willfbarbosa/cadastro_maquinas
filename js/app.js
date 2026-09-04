@@ -2190,32 +2190,9 @@ const App = {
       this.showToast(`OS Concluída! Valor de R$ ${totalCost.toFixed(2)} lançado como ENTRADA no Livro Caixa.`, 'success');
     }
 
-    // AUTOMAÇÃO 2: Valor Peças/Componentes > 0 -> SAÍDA (Despesa) no Livro Caixa
-    if (partsCost > 0) {
-      const cashExpensePayload = {
-        date: new Date().toISOString().split('T')[0],
-        type: 'SAIDA',
-        category: 'Manutenção / Peças',
-        description: `Peças/Componentes OS (${payload.code || 'OS'}): ${clientName} - ${equipmentDescription}`,
-        amount: partsCost,
-        paymentMethod,
-        equipmentId
-      };
-      try {
-        await fetch('/api/cashbook', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cashExpensePayload)
-        });
-      } catch (e) {
-        this.cashbookEntries.unshift({ ...cashExpensePayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
-        this.saveCashbookLocal();
-      }
-      this.showToast(`Valor de peças (R$ ${partsCost.toFixed(2)}) lançado como SAÍDA no Livro Caixa!`, 'info');
-    }
-
     await this.loadCashbook();
     if (this.activeTab === 'cashbook') this.renderCashbookAll();
+
 
 
     this.closeServiceOrderModal();

@@ -338,10 +338,10 @@ app.delete('/api/stock/:id', async (req, res) => {
 
 // Helper para sincronizar Orçamento / OS com o Livro Caixa
 async function syncOrderToCashbook(orderData) {
-  const { code, clientName, equipmentDescription, status, partsCost, totalCost, paymentMethod, equipmentId } = orderData;
+  const { code, clientName, equipmentDescription, status, totalCost, paymentMethod, equipmentId } = orderData;
   const date = new Date().toISOString().split('T')[0];
 
-  // 1. Status === 'CONCLUIDO' -> ENTRADA no Livro Caixa com valor total do serviço (quando concluída)
+  // SOMENTE Status === 'CONCLUIDO' insere ENTRADA no Livro Caixa com valor total do serviço
   if (status === 'CONCLUIDO' && totalCost > 0) {
     const existing = await dbGet('SELECT id FROM cashbook WHERE type = "ENTRADA" AND description LIKE ?', [`%${code}%`]);
     if (!existing) {
@@ -353,21 +353,8 @@ async function syncOrderToCashbook(orderData) {
       );
     }
   }
-
-
-  // 2. Valor de Peças / Componentes -> SAÍDA (Despesa) no Livro Caixa
-  if (partsCost > 0) {
-    const existing = await dbGet('SELECT id FROM cashbook WHERE type = "SAIDA" AND description LIKE ?', [`%${code}%`]);
-    if (!existing) {
-      const cbId = 'cb_pts_' + Date.now();
-      await dbRun(
-        `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [cbId, date, 'SAIDA', 'Manutenção / Peças', `Peças/Componentes OS (${code}): ${clientName} - ${equipmentDescription || 'Manutenção'}`, partsCost, paymentMethod || 'PIX', equipmentId || null, new Date().toISOString()]
-      );
-    }
-  }
 }
+
 
 // ============================================================================
 // ROTAS DO LIVRO CAIXA
