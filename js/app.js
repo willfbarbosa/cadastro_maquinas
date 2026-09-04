@@ -8,6 +8,7 @@ const STORAGE_COLUMNS_KEY = 'app_inventory_visible_columns';
 const STORAGE_CASHBOOK_KEY = 'app_inventory_cashbook';
 const STORAGE_STOCK_KEY = 'app_inventory_stock';
 const STORAGE_SERVICE_ORDERS_KEY = 'app_inventory_service_orders';
+const STORAGE_CONTRACTS_KEY = 'app_inventory_contracts';
 
 const DEFAULT_COLUMNS = {
   tipo: true,
@@ -26,18 +27,21 @@ const DEFAULT_COLUMNS = {
 };
 
 const App = {
-  activeTab: 'inventory', // 'inventory', 'stock', 'cashbook' ou 'orders'
+  activeTab: 'inventory', // 'inventory', 'stock', 'cashbook', 'orders' ou 'contracts'
   equipments: [],
   cashbookEntries: [],
   stockItems: [],
   serviceOrders: [],
+  contracts: [],
   filteredEquipments: [],
   filteredCashbook: [],
   filteredStock: [],
   filteredOrders: [],
+  filteredContracts: [],
   editingId: null,
   editingStockId: null,
   editingOrderId: null,
+  editingContractId: null,
   activeStockMovementId: null,
   activeMaintenanceEquipmentId: null,
   editingUserId: null,
@@ -50,6 +54,7 @@ const App = {
     await this.loadCashbook();
     await this.loadStock();
     await this.loadServiceOrders();
+    await this.loadContracts();
     this.bindEvents();
     this.checkAuthState();
   },
@@ -61,21 +66,25 @@ const App = {
     const tabStkBtn = document.getElementById('tab-btn-stock');
     const tabCashBtn = document.getElementById('tab-btn-cashbook');
     const tabOrdBtn = document.getElementById('tab-btn-orders');
+    const tabCtrBtn = document.getElementById('tab-btn-contracts');
 
     const invSection = document.getElementById('inventory-tab-section');
     const stkSection = document.getElementById('stock-tab-section');
     const cashSection = document.getElementById('cashbook-tab-section');
     const ordSection = document.getElementById('orders-tab-section');
+    const ctrSection = document.getElementById('contracts-tab-section');
 
     if (tabInvBtn) tabInvBtn.classList.remove('active');
     if (tabStkBtn) tabStkBtn.classList.remove('active');
     if (tabCashBtn) tabCashBtn.classList.remove('active');
     if (tabOrdBtn) tabOrdBtn.classList.remove('active');
+    if (tabCtrBtn) tabCtrBtn.classList.remove('active');
 
     if (invSection) invSection.style.display = 'none';
     if (stkSection) stkSection.style.display = 'none';
     if (cashSection) cashSection.style.display = 'none';
     if (ordSection) ordSection.style.display = 'none';
+    if (ctrSection) ctrSection.style.display = 'none';
 
     if (tabName === 'inventory') {
       if (tabInvBtn) tabInvBtn.classList.add('active');
@@ -93,6 +102,10 @@ const App = {
       if (tabOrdBtn) tabOrdBtn.classList.add('active');
       if (ordSection) ordSection.style.display = 'block';
       this.renderOrdersAll();
+    } else if (tabName === 'contracts') {
+      if (tabCtrBtn) tabCtrBtn.classList.add('active');
+      if (ctrSection) ctrSection.style.display = 'block';
+      this.renderContractsAll();
     }
   },
 
@@ -2410,6 +2423,430 @@ const App = {
       .replace(/'/g, '&#039;');
   },
 
+  async loadContracts() {
+    try {
+      const res = await fetch('/api/contracts');
+      const data = await res.json();
+      if (data.success) {
+        this.contracts = data.contracts;
+        localStorage.setItem(STORAGE_CONTRACTS_KEY, JSON.stringify(data.contracts));
+        this.filteredContracts = [...this.contracts];
+        return;
+      }
+    } catch (e) {
+      console.warn('API SQLite inacessível. Carregando Contratos via localStorage.');
+    }
+    const stored = localStorage.getItem(STORAGE_CONTRACTS_KEY);
+    if (stored) {
+      this.contracts = JSON.parse(stored);
+    } else {
+      this.contracts = [];
+      this.saveContractsLocal();
+    }
+    this.filteredContracts = [...this.contracts];
+  },
+
+  saveContractsLocal() {
+    localStorage.setItem(STORAGE_CONTRACTS_KEY, JSON.stringify(this.contracts));
+  },
+
+  openContractModal(contractId = null) {
+    this.editingContractId = contractId;
+    const form = document.getElementById('contract-form');
+    const titleEl = document.getElementById('contract-modal-title');
+
+    if (form) form.reset();
+
+    if (contractId) {
+      const ctr = this.contracts.find(c => c.id == contractId);
+      if (ctr) {
+        if (titleEl) titleEl.innerText = 'Editar Contrato Mensal';
+        document.getElementById('ctr-field-id').value = ctr.id;
+        document.getElementById('ctr-field-client-name').value = ctr.clientName || '';
+        document.getElementById('ctr-field-client-contact').value = ctr.clientContact || '';
+        document.getElementById('ctr-field-due-day').value = ctr.dueDay || 10;
+        document.getElementById('ctr-field-monthly-value').value = ctr.monthlyValue || 0;
+        document.getElementById('ctr-field-extra-value').value = ctr.extraValue || 0;
+        document.getElementById('ctr-field-extra-desc').value = ctr.extraDescription || '';
+        document.getElementById('ctr-field-payment-method').value = ctr.paymentMethod || 'PIX';
+        document.getElementById('ctr-field-status').value = ctr.status || 'PENDENTE';
+        document.getElementById('ctr-field-notes').value = ctr.notes || '';
+      }
+    } else {
+      if (titleEl) titleEl.innerText = 'Novo Contrato Mensal';
+      document.getElementById('ctr-field-id').value = '';
+      document.getElementById('ctr-field-due-day').value = '10';
+      document.getElementById('ctr-field-monthly-value').value = '';
+      document.getElementById('ctr-field-extra-value').value = '0.00';
+      document.getElementById('ctr-field-status').value = 'PENDENTE';
+    }
+
+    this.calculateContractTotal();
+    const modal = document.getElementById('contract-modal');
+    if (modal) modal.classList.add('active');
+  },
+
+  closeContractModal() {
+    const modal = document.getElementById('contract-modal');
+    if (modal) modal.classList.remove('active');
+    this.editingContractId = null;
+  },
+
+  calculateContractTotal() {
+    const monthlyVal = parseFloat(document.getElementById('ctr-field-monthly-value')?.value) || 0;
+    const extraVal = parseFloat(document.getElementById('ctr-field-extra-value')?.value) || 0;
+    const total = monthlyVal + extraVal;
+    const displayEl = document.getElementById('ctr-field-total-display');
+    if (displayEl) {
+      displayEl.value = this.formatCurrency(total);
+    }
+  },
+
+  async saveContract(e) {
+    if (e) e.preventDefault();
+
+    const id = document.getElementById('ctr-field-id').value;
+    const clientName = document.getElementById('ctr-field-client-name').value.trim();
+    const clientContact = document.getElementById('ctr-field-client-contact').value.trim();
+    const dueDay = parseInt(document.getElementById('ctr-field-due-day').value) || 10;
+    const monthlyValue = parseFloat(document.getElementById('ctr-field-monthly-value').value) || 0;
+    const extraValue = parseFloat(document.getElementById('ctr-field-extra-value').value) || 0;
+    const extraDescription = document.getElementById('ctr-field-extra-desc').value.trim();
+    const paymentMethod = document.getElementById('ctr-field-payment-method').value;
+    const status = document.getElementById('ctr-field-status').value;
+    const notes = document.getElementById('ctr-field-notes').value.trim();
+
+    if (!clientName) {
+      alert('Por favor, informe o Nome do Cliente ou Empresa.');
+      return;
+    }
+
+    const payload = {
+      clientName,
+      clientContact,
+      dueDay,
+      monthlyValue,
+      extraValue,
+      extraDescription,
+      paymentMethod,
+      status,
+      notes
+    };
+
+    try {
+      let res, data;
+      if (id) {
+        res = await fetch(`/api/contracts/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch('/api/contracts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+      data = await res.json();
+      if (data.success) {
+        this.showToast(id ? 'Contrato atualizado com sucesso!' : 'Contrato cadastrado com sucesso!', 'success');
+        this.closeContractModal();
+        await this.loadContracts();
+        await this.loadCashbook();
+        this.renderContractsAll();
+        return;
+      }
+    } catch (err) {
+      console.error('Erro ao salvar no servidor:', err);
+    }
+
+    // Fallback local
+    const now = new Date().toISOString();
+    let oldStatus = 'PENDENTE';
+    if (id) {
+      const existingIndex = this.contracts.findIndex(c => c.id == id);
+      if (existingIndex !== -1) {
+        oldStatus = this.contracts[existingIndex].status;
+        this.contracts[existingIndex] = {
+          ...this.contracts[existingIndex],
+          ...payload,
+          updatedAt: now
+        };
+      }
+    } else {
+      const newId = Date.now().toString();
+      this.contracts.unshift({
+        id: newId,
+        ...payload,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+
+    if (status === 'PAGO' && oldStatus !== 'PAGO') {
+      const totalVal = monthlyValue + extraValue;
+      const cashEntry = {
+        id: Date.now().toString(),
+        type: 'ENTRADA',
+        category: 'Contrato Mensal',
+        description: `Contrato Mensal: ${clientName} (Venc: Dia ${dueDay})`,
+        amount: totalVal,
+        date: new Date().toISOString().split('T')[0],
+        paymentMethod: paymentMethod || 'PIX',
+        responsible: AuthModule.currentUser ? AuthModule.currentUser.name : 'Administrador',
+        notes: `Validado via Contratos Mensais`
+      };
+      this.cashbookEntries.unshift(cashEntry);
+      this.saveCashbookLocal();
+    }
+
+    this.saveContractsLocal();
+    this.closeContractModal();
+    this.renderContractsAll();
+    this.showToast('Contrato salvo localmente.', 'success');
+  },
+
+  async validateContractPayment(contractId) {
+    if (!AuthModule.isAdmin()) {
+      alert('Apenas o Administrador pode validar pagamentos de contratos.');
+      return;
+    }
+
+    const ctr = this.contracts.find(c => c.id == contractId);
+    if (!ctr) return;
+
+    const totalVal = (parseFloat(ctr.monthlyValue) || 0) + (parseFloat(ctr.extraValue) || 0);
+    const confirmMsg = `Deseja validar o pagamento do contrato de "${ctr.clientName}" no valor de R$ ${totalVal.toFixed(2)}?\n\nIsso alterará o status para PAGO e lançará automaticamente uma ENTRADA no Livro Caixa.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/pay`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          validatedBy: AuthModule.currentUser ? AuthModule.currentUser.name : 'Administrador'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        this.showToast(`Pagamento do contrato de ${ctr.clientName} validado com sucesso!`, 'success');
+        await this.loadContracts();
+        await this.loadCashbook();
+        this.renderContractsAll();
+        return;
+      }
+    } catch (err) {
+      console.error('Erro na requisição /pay:', err);
+    }
+
+    // Fallback local
+    ctr.status = 'PAGO';
+    ctr.lastPaymentDate = new Date().toISOString();
+    
+    const cashEntry = {
+      id: Date.now().toString(),
+      type: 'ENTRADA',
+      category: 'Contrato Mensal',
+      description: `Contrato Mensal: ${ctr.clientName} (Venc: Dia ${ctr.dueDay})`,
+      amount: totalVal,
+      date: new Date().toISOString().split('T')[0],
+      paymentMethod: ctr.paymentMethod || 'PIX',
+      responsible: AuthModule.currentUser ? AuthModule.currentUser.name : 'Administrador',
+      notes: `Validado via Contratos Mensais`
+    };
+    this.cashbookEntries.unshift(cashEntry);
+    this.saveCashbookLocal();
+    this.saveContractsLocal();
+    this.renderContractsAll();
+    this.showToast(`Pagamento de ${ctr.clientName} validado (modo offline)!`, 'success');
+  },
+
+  async deleteContract(contractId) {
+    if (!AuthModule.isAdmin()) {
+      alert('Apenas o Administrador pode excluir contratos.');
+      return;
+    }
+
+    const ctr = this.contracts.find(c => c.id == contractId);
+    if (!ctr) return;
+
+    if (!confirm(`Tem certeza que deseja excluir o contrato do cliente "${ctr.clientName}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/contracts/${contractId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        this.showToast('Contrato excluído com sucesso!', 'success');
+        await this.loadContracts();
+        this.renderContractsAll();
+        return;
+      }
+    } catch (err) {
+      console.error('Erro ao excluir no servidor:', err);
+    }
+
+    // Fallback local
+    this.contracts = this.contracts.filter(c => c.id != contractId);
+    this.saveContractsLocal();
+    this.renderContractsAll();
+    this.showToast('Contrato excluído localmente.', 'success');
+  },
+
+  renderContractsAll() {
+    this.applyContractsFilters();
+    this.renderContractMetrics();
+    this.renderContractsTable();
+  },
+
+  applyContractsFilters() {
+    const search = (document.getElementById('contract-search-input')?.value || '').toLowerCase().trim();
+    const statusFilter = document.getElementById('contract-filter-status')?.value || '';
+
+    this.filteredContracts = this.contracts.filter(c => {
+      const matchSearch = !search || 
+        (c.clientName && c.clientName.toLowerCase().includes(search)) ||
+        (c.clientContact && c.clientContact.toLowerCase().includes(search)) ||
+        (c.notes && c.notes.toLowerCase().includes(search));
+
+      const matchStatus = !statusFilter || c.status === statusFilter;
+
+      return matchSearch && matchStatus;
+    });
+  },
+
+  renderContractMetrics() {
+    const totalCount = this.contracts.length;
+    let totalRecurring = 0;
+    let totalPaidMonth = 0;
+    let pendingCount = 0;
+
+    this.contracts.forEach(c => {
+      const monthly = parseFloat(c.monthlyValue) || 0;
+      const extra = parseFloat(c.extraValue) || 0;
+      totalRecurring += monthly;
+
+      if (c.status === 'PAGO') {
+        totalPaidMonth += (monthly + extra);
+      } else {
+        pendingCount++;
+      }
+    });
+
+    const elTotal = document.getElementById('metric-contracts-total');
+    const elRec = document.getElementById('metric-contracts-recurring');
+    const elPaid = document.getElementById('metric-contracts-paid');
+    const elPend = document.getElementById('metric-contracts-pending');
+
+    if (elTotal) elTotal.innerText = totalCount;
+    if (elRec) elRec.innerText = this.formatCurrency(totalRecurring);
+    if (elPaid) elPaid.innerText = this.formatCurrency(totalPaidMonth);
+    if (elPend) elPend.innerText = pendingCount;
+  },
+
+  renderContractsTable() {
+    const tbody = document.getElementById('contracts-table-body');
+    if (!tbody) return;
+
+    if (this.filteredContracts.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+            Nenhum contrato mensal encontrado.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const isAdmin = AuthModule.isAdmin();
+
+    tbody.innerHTML = this.filteredContracts.map(c => {
+      const monthly = parseFloat(c.monthlyValue) || 0;
+      const extra = parseFloat(c.extraValue) || 0;
+      const totalMonth = monthly + extra;
+
+      let statusBadge = '';
+      if (c.status === 'PAGO') {
+        statusBadge = '<span class="status-badge status-ativo" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">🟢 PAGO</span>';
+      } else if (c.status === 'ATRASADO') {
+        statusBadge = '<span class="status-badge status-manutencao" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;">🔴 EM ATRASO</span>';
+      } else {
+        statusBadge = '<span class="status-badge status-reserva" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">🟡 PENDENTE</span>';
+      }
+
+      let payBtnHtml = '';
+      if (c.status !== 'PAGO' && isAdmin) {
+        payBtnHtml = `
+          <button class="btn btn-secondary btn-sm" onclick="App.validateContractPayment('${c.id}')" title="Validar Recebimento (Lança no Livro Caixa)" style="color: #10b981; border-color: #10b981;">
+            🟢 Validar Pago
+          </button>
+        `;
+      }
+
+      return `
+        <tr>
+          <td>
+            <strong>${this.escapeHtml(c.clientName || 'N/A')}</strong>
+          </td>
+          <td>${this.escapeHtml(c.clientContact || '-')}</td>
+          <td><span class="badge" style="background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color);">Dia ${c.dueDay || 10}</span></td>
+          <td><strong>${this.formatCurrency(monthly)}</strong></td>
+          <td>${extra > 0 ? `<span style="color: #10b981; font-weight: 600;">+ ${this.formatCurrency(extra)}</span>` : '-'}</td>
+          <td><strong style="color: #3b82f6;">${this.formatCurrency(totalMonth)}</strong></td>
+          <td>${this.escapeHtml(c.paymentMethod || 'PIX')}</td>
+          <td>${statusBadge}</td>
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end;">
+              ${payBtnHtml}
+              <button class="btn btn-secondary btn-sm" onclick="App.openContractModal('${c.id}')" title="Editar Contrato">
+                ✏️
+              </button>
+              ${isAdmin ? `
+                <button class="btn btn-danger btn-sm" onclick="App.deleteContract('${c.id}')" title="Excluir Contrato">
+                  🗑️
+                </button>
+              ` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  exportContractsCSV() {
+    if (this.contracts.length === 0) {
+      alert('Nenhum contrato para exportar.');
+      return;
+    }
+
+    const headers = ['ID', 'Cliente', 'Contato', 'Dia Vencimento', 'Valor Mensal (R$)', 'Extras Mes (R$)', 'Descricao Extras', 'Forma Pagamento', 'Status', 'Observacoes', 'Ultimo Pagamento'];
+    
+    const rows = this.contracts.map(c => [
+      c.id,
+      `"${(c.clientName || '').replace(/"/g, '""')}"`,
+      `"${(c.clientContact || '').replace(/"/g, '""')}"`,
+      c.dueDay,
+      (c.monthlyValue || 0).toFixed(2),
+      (c.extraValue || 0).toFixed(2),
+      `"${(c.extraDescription || '').replace(/"/g, '""')}"`,
+      c.paymentMethod || 'PIX',
+      c.status || 'PENDENTE',
+      `"${(c.notes || '').replace(/"/g, '""')}"`,
+      c.lastPaymentDate || ''
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(';'), ...rows.map(e => e.join(';'))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `contratos_mensais_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
   bindEvents() {
     document.getElementById('first-setup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2488,6 +2925,14 @@ const App = {
     document.getElementById('order-search-input').addEventListener('input', () => this.renderOrdersAll());
     document.getElementById('order-filter-type').addEventListener('change', () => this.renderOrdersAll());
     document.getElementById('order-filter-status').addEventListener('change', () => this.renderOrdersAll());
+
+    // Eventos Contratos Mensais
+    const ctrForm = document.getElementById('contract-form');
+    if (ctrForm) ctrForm.addEventListener('submit', (e) => this.saveContract(e));
+    const ctrSearch = document.getElementById('contract-search-input');
+    if (ctrSearch) ctrSearch.addEventListener('input', () => this.renderContractsAll());
+    const ctrFilter = document.getElementById('contract-filter-status');
+    if (ctrFilter) ctrFilter.addEventListener('change', () => this.renderContractsAll());
 
     document.getElementById('log-filter-type').addEventListener('change', () => this.renderLogsTable());
     document.getElementById('log-search-input').addEventListener('input', () => this.renderLogsTable());

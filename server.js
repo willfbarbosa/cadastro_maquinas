@@ -557,6 +557,153 @@ app.delete('/api/service-orders/:id', async (req, res) => {
 });
 
 // ============================================================================
+// ROTAS DE CONTRATOS MENSAIS RECORRENTES
+// ============================================================================
+
+app.get('/api/contracts', async (req, res) => {
+  try {
+    const contracts = await dbAll('SELECT * FROM contracts ORDER BY dueDay ASC, createdAt DESC');
+    res.json({ success: true, contracts });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/contracts', async (req, res) => {
+  try {
+    const data = req.body;
+    const id = data.id || 'ctr_' + Date.now();
+    const createdAt = new Date().toISOString();
+
+    const monthlyValue = parseFloat(data.monthlyValue) || 0;
+    const dueDay = parseInt(data.dueDay) || 10;
+    const extraValue = parseFloat(data.extraValue) || 0;
+
+    await dbRun(
+      `INSERT INTO contracts (id, clientName, clientContact, monthlyValue, dueDay, extraValue, extraDescription, status, paymentMethod, notes, lastPaymentDate, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        data.clientName,
+        data.clientContact || '',
+        monthlyValue,
+        dueDay,
+        extraValue,
+        data.extraDescription || '',
+        data.status || 'PENDENTE',
+        data.paymentMethod || 'PIX',
+        data.notes || '',
+        data.lastPaymentDate || '',
+        createdAt
+      ]
+    );
+
+    if (data.status === 'PAGO') {
+      const totalAmount = monthlyValue + extraValue;
+      if (totalAmount > 0) {
+        const cbId = 'cb_ctr_' + Date.now();
+        const date = new Date().toISOString().split('T')[0];
+        await dbRun(
+          `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [cbId, date, 'ENTRADA', 'Contrato Mensal', `Contrato Mensal: ${data.clientName} (Venc: Dia ${dueDay})`, totalAmount, data.paymentMethod || 'PIX', null, createdAt]
+        );
+      }
+    }
+
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/contracts/:id', async (req, res) => {
+  try {
+    const data = req.body;
+    const updatedAt = new Date().toISOString();
+
+    const monthlyValue = parseFloat(data.monthlyValue) || 0;
+    const dueDay = parseInt(data.dueDay) || 10;
+    const extraValue = parseFloat(data.extraValue) || 0;
+
+    await dbRun(
+      `UPDATE contracts SET clientName = ?, clientContact = ?, monthlyValue = ?, dueDay = ?, extraValue = ?, extraDescription = ?, status = ?, paymentMethod = ?, notes = ?, updatedAt = ?
+       WHERE id = ?`,
+      [
+        data.clientName,
+        data.clientContact || '',
+        monthlyValue,
+        dueDay,
+        extraValue,
+        data.extraDescription || '',
+        data.status || 'PENDENTE',
+        data.paymentMethod || 'PIX',
+        data.notes || '',
+        updatedAt,
+        req.params.id
+      ]
+    );
+
+    if (data.status === 'PAGO') {
+      const totalAmount = monthlyValue + extraValue;
+      if (totalAmount > 0) {
+        const cbId = 'cb_ctr_' + Date.now();
+        const date = new Date().toISOString().split('T')[0];
+        await dbRun(
+          `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [cbId, date, 'ENTRADA', 'Contrato Mensal', `Contrato Mensal: ${data.clientName} (Venc: Dia ${dueDay})`, totalAmount, data.paymentMethod || 'PIX', null, updatedAt]
+        );
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.patch('/api/contracts/:id/pay', async (req, res) => {
+  try {
+    const contract = await dbGet('SELECT * FROM contracts WHERE id = ?', [req.params.id]);
+    if (!contract) return res.status(404).json({ success: false, message: 'Contrato não encontrado.' });
+
+    const updatedAt = new Date().toISOString();
+    const lastPaymentDate = new Date().toISOString().split('T')[0];
+
+    await dbRun(
+      `UPDATE contracts SET status = 'PAGO', lastPaymentDate = ?, updatedAt = ? WHERE id = ?`,
+      [lastPaymentDate, updatedAt, req.params.id]
+    );
+
+    const totalAmount = (parseFloat(contract.monthlyValue) || 0) + (parseFloat(contract.extraValue) || 0);
+
+    if (totalAmount > 0) {
+      const cbId = 'cb_ctr_' + Date.now();
+      await dbRun(
+        `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [cbId, lastPaymentDate, 'ENTRADA', 'Contrato Mensal', `Contrato Mensal: ${contract.clientName} (Venc: Dia ${contract.dueDay})`, totalAmount, contract.paymentMethod || 'PIX', null, updatedAt]
+      );
+    }
+
+    res.json({ success: true, message: 'Pagamento validado como PAGO e inserido no Livro Caixa!' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/contracts/:id', async (req, res) => {
+  try {
+    await dbRun('DELETE FROM contracts WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+// ============================================================================
 // ROTAS DE LOGS DO SISTEMA
 // ============================================================================
 

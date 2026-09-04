@@ -209,9 +209,30 @@ async function initDatabase() {
     )
   `);
 
+  // 8. Tabela de Contratos Mensais Recorrentes
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS contracts (
+      id TEXT PRIMARY KEY,
+      clientName TEXT NOT NULL,
+      clientContact TEXT,
+      monthlyValue REAL NOT NULL DEFAULT 0,
+      dueDay INTEGER NOT NULL DEFAULT 10,
+      extraValue REAL NOT NULL DEFAULT 0,
+      extraDescription TEXT,
+      status TEXT NOT NULL DEFAULT 'PENDENTE',
+      paymentMethod TEXT NOT NULL DEFAULT 'PIX',
+      notes TEXT,
+      lastPaymentDate TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT
+    )
+  `);
+
+
   await seedInitialData();
-  console.log('✅ Banco de dados SQLite pronto para uso!');
+  console.log('✅ Banco de dados SQLite / Turso Cloud pronto para uso!');
 }
+
 
 async function seedInitialData() {
   // Verificação e População do Usuário Administrador Mestre Padrão
