@@ -372,7 +372,7 @@ select.form-control {
   color: var(--text-muted);
 }
 
-/* NAVEGAÇÃO DE ABAS (INVENTÁRIO / ESTOQUE / LIVRO CAIXA) */
+/* NAVEGAÇÃO DE ABAS (INVENTÁRIO / ESTOQUE / LIVRO CAIXA / OS / CONTRATOS) */
 .app-nav-tabs {
   display: flex;
   align-items: center;
@@ -381,6 +381,15 @@ select.form-control {
   padding: 0.25rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
+  overflow-x: auto;
+  white-space: nowrap;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.app-nav-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .nav-tab-btn {
@@ -397,6 +406,8 @@ select.form-control {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .nav-tab-btn:hover {
@@ -1374,6 +1385,28 @@ select.form-control {
     align-items: stretch;
     gap: 0.65rem;
     width: 100%;
+  }
+
+  .app-nav-tabs {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.35rem;
+    gap: 0.35rem;
+    scrollbar-width: none;
+    border-radius: var(--radius-md);
+  }
+
+  .app-nav-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-tab-btn {
+    font-size: 0.78rem;
+    padding: 0.45rem 0.7rem;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .user-nav-profile {
