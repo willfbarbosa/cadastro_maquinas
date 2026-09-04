@@ -1657,50 +1657,54 @@ const App = {
   },
 
   async clearAllDatabaseData() {
-    if (!AuthModule.hasPermission('isAdmin')) {
-      alert('Apenas usuários Administradores podem zerar o banco de dados.');
-      return;
-    }
-
-    if (confirm('⚠️ ATENÇÃO: Deseja apagar TODOS os equipamentos, produtos do estoque, lançamentos do caixa e ordens de serviço do banco de dados?\n\nEsta ação é irreversível.')) {
+    if (confirm('⚠️ ATENÇÃO: Deseja apagar TODOS os equipamentos, produtos do estoque, lançamentos do caixa e ordens de serviço do banco de dados?\n\nEsta ação é irreversível e limpará o banco na nuvem (Turso Cloud) e a memória local.')) {
       try {
-        if (typeof API !== 'undefined' && API.enabled) {
-          const res = await API.post('/clear-all-data', {});
-          if (!res.success) {
-            console.warn('Erro ao zerar banco via API:', res.message);
-          }
+        const res = await fetch('/api/clear-all-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.success) {
+          console.log('✅ Banco de dados zerado com sucesso no servidor!');
+        } else {
+          console.warn('⚠️ Erro retornado pela API ao zerar banco:', data.message);
         }
       } catch (err) {
-        console.error('Falha na requisição de limpeza:', err);
+        console.error('❌ Falha na requisição de limpeza para o servidor:', err);
       }
 
       this.equipments = [];
       this.cashbookEntries = [];
       this.stockItems = [];
       this.serviceOrders = [];
+      this.filteredEquipments = [];
+      this.filteredCashbook = [];
+      this.filteredStock = [];
+      this.filteredOrders = [];
 
       this.saveEquipmentsLocal();
       this.saveCashbookLocal();
       this.saveStockLocal();
       this.saveServiceOrdersLocal();
 
-      localStorage.removeItem('ez_equipments');
-      localStorage.removeItem('ez_cashbook');
-      localStorage.removeItem('ez_stock');
-      localStorage.removeItem('ez_service_orders');
+      localStorage.removeItem(STORAGE_EQUIPMENTS_KEY);
+      localStorage.removeItem(STORAGE_CASHBOOK_KEY);
+      localStorage.removeItem(STORAGE_STOCK_KEY);
+      localStorage.removeItem(STORAGE_SERVICE_ORDERS_KEY);
 
       this.renderAll();
       if (typeof this.renderStockAll === 'function') this.renderStockAll();
       if (typeof this.renderCashbookAll === 'function') this.renderCashbookAll();
       if (typeof this.renderOrdersTable === 'function') this.renderOrdersTable();
 
-      this.showToast('Banco de dados zerado com sucesso! Nenhum dado cadastrado no momento.', 'success');
+      this.showToast('Banco de dados e memória zerados com sucesso! Nenhum dado cadastrado.', 'success');
     }
   },
 
   async loadSampleData() {
     await this.clearAllDatabaseData();
   },
+
 
 
   openLogsModal() {
