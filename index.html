@@ -795,7 +795,7 @@
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M12 4v16m8-8H4"></path>
                   </svg>
-                  + Novo Contrato Mensal
+                  Novo Contrato Mensal
                 </button>
               </div>
             </div>
@@ -825,98 +825,7 @@
 
       </main>
 
-  <!-- MODAL: CADASTRO / EDIÇÃO DE CONTRATO MENSAL -->
-  <div id="contract-modal" class="modal-backdrop">
-    <div class="modal-card" style="max-width: 680px;">
-      <div class="modal-header">
-        <h3 id="contract-modal-title" class="modal-title">Novo Contrato Mensal</h3>
-        <button class="modal-close-btn" onclick="App.closeContractModal()">&times;</button>
-      </div>
 
-      <form id="contract-form" onsubmit="App.saveContract(event)">
-        <input type="hidden" id="ctr-field-id">
-        <div class="modal-body">
-          <div class="form-grid">
-            
-            <div class="form-group full-width">
-              <label class="form-label" for="ctr-field-client-name">Nome do Cliente / Empresa *</label>
-              <input type="text" id="ctr-field-client-name" class="form-control" placeholder="ex: Condomínio Solar ou Alfa TI" required>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="ctr-field-client-contact">Telefone / E-mail / Contato</label>
-              <input type="text" id="ctr-field-client-contact" class="form-control" placeholder="ex: (11) 98888-7777 ou contato@email.com">
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="ctr-field-due-day">Dia de Vencimento Mensal *</label>
-              <select id="ctr-field-due-day" class="form-control" required>
-                <option value="1">Dia 01</option>
-                <option value="5">Dia 05</option>
-                <option value="10" selected>Dia 10</option>
-                <option value="15">Dia 15</option>
-                <option value="20">Dia 20</option>
-                <option value="25">Dia 25</option>
-                <option value="30">Dia 30</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="ctr-field-monthly-value">Valor Mensal Fixo (R$) *</label>
-              <input type="number" step="0.01" min="0" id="ctr-field-monthly-value" class="form-control" placeholder="ex: 500.00" required oninput="App.calculateContractTotal()">
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="ctr-field-extra-value">Valores Extras Mês Vigente (R$)</label>
-              <input type="number" step="0.01" min="0" id="ctr-field-extra-value" class="form-control" placeholder="ex: 150.00" value="0.00" oninput="App.calculateContractTotal()">
-            </div>
-
-            <div class="form-group full-width">
-              <label class="form-label" for="ctr-field-extra-desc">Descrição dos Valores Extras do Mês</label>
-              <input type="text" id="ctr-field-extra-desc" class="form-control" placeholder="ex: Instalação de 2 câmeras extras ou substituição de fonte no mês">
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Valor Total Calculado (R$)</label>
-              <input type="text" id="ctr-field-total-display" class="form-control" style="font-weight: 700; color: #10b981;" value="R$ 0,00" readonly>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="ctr-field-payment-method">Forma de Pagamento</label>
-              <select id="ctr-field-payment-method" class="form-control">
-                <option value="PIX">PIX</option>
-                <option value="BOLETO">Boleto Bancário</option>
-                <option value="DINHEIRO">Dinheiro</option>
-                <option value="CARTAO_CREDITO">Cartão de Crédito</option>
-                <option value="CARTAO_DEBITO">Cartão de Débito</option>
-                <option value="TRANSFERENCIA">Transferência Bancária</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="ctr-field-status">Status do Pagamento *</label>
-              <select id="ctr-field-status" class="form-control" required>
-                <option value="PENDENTE">🟡 Pendente (Aguardando Pagamento)</option>
-                <option value="PAGO">🟢 PAGO (Lança automaticamente no Livro Caixa)</option>
-                <option value="ATRASADO">🔴 Em Atraso</option>
-              </select>
-            </div>
-
-            <div class="form-group full-width">
-              <label class="form-label" for="ctr-field-notes">Observações do Contrato</label>
-              <textarea id="ctr-field-notes" class="form-control" rows="2" placeholder="Observações, escopo do contrato ou particularidades..."></textarea>
-            </div>
-
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="App.closeContractModal()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar Contrato</button>
-        </div>
-      </form>
-    </div>
-  </div>
 
 
       <!-- RODAPÉ -->
@@ -1693,6 +1602,99 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="App.closeAdminConfirmModal()">Cancelar</button>
           <button type="submit" class="btn btn-danger">Confirmar e Zerar Banco</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CADASTRO / EDIÇÃO DE CONTRATO MENSAL -->
+  <div id="contract-modal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 id="contract-modal-title" class="modal-title">Novo Contrato Mensal</h3>
+        <button class="modal-close-btn" onclick="App.closeContractModal()">&times;</button>
+      </div>
+
+      <form id="contract-form" onsubmit="App.saveContract(event)">
+        <input type="hidden" id="ctr-field-id">
+        <div class="modal-body">
+          <div class="form-grid">
+            
+            <div class="form-group full-width">
+              <label class="form-label" for="ctr-field-client-name">Nome do Cliente / Empresa *</label>
+              <input type="text" id="ctr-field-client-name" class="form-control" placeholder="ex: Condomínio Solar ou Alfa TI" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-client-contact">Telefone / E-mail / Contato</label>
+              <input type="text" id="ctr-field-client-contact" class="form-control" placeholder="ex: (11) 98888-7777 ou contato@email.com">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-due-day">Dia de Vencimento Mensal *</label>
+              <select id="ctr-field-due-day" class="form-control" required>
+                <option value="1">Dia 01</option>
+                <option value="5">Dia 05</option>
+                <option value="10" selected>Dia 10</option>
+                <option value="15">Dia 15</option>
+                <option value="20">Dia 20</option>
+                <option value="25">Dia 25</option>
+                <option value="30">Dia 30</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-monthly-value">Valor Mensal Fixo (R$) *</label>
+              <input type="number" step="0.01" min="0" id="ctr-field-monthly-value" class="form-control" placeholder="ex: 500.00" required oninput="App.calculateContractTotal()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-extra-value">Valores Extras Mês Vigente (R$)</label>
+              <input type="number" step="0.01" min="0" id="ctr-field-extra-value" class="form-control" placeholder="ex: 150.00" value="0.00" oninput="App.calculateContractTotal()">
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="ctr-field-extra-desc">Descrição dos Valores Extras do Mês</label>
+              <input type="text" id="ctr-field-extra-desc" class="form-control" placeholder="ex: Instalação de 2 câmeras extras ou substituição de fonte no mês">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Valor Total Calculado (R$)</label>
+              <input type="text" id="ctr-field-total-display" class="form-control" style="font-weight: 700; color: #10b981;" value="R$ 0,00" readonly>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-payment-method">Forma de Pagamento</label>
+              <select id="ctr-field-payment-method" class="form-control">
+                <option value="PIX">PIX</option>
+                <option value="BOLETO">Boleto Bancário</option>
+                <option value="DINHEIRO">Dinheiro</option>
+                <option value="CARTAO_CREDITO">Cartão de Crédito</option>
+                <option value="CARTAO_DEBITO">Cartão de Débito</option>
+                <option value="TRANSFERENCIA">Transferência Bancária</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="ctr-field-status">Status do Pagamento *</label>
+              <select id="ctr-field-status" class="form-control" required>
+                <option value="PENDENTE">🟡 Pendente (Aguardando Pagamento)</option>
+                <option value="PAGO">🟢 PAGO (Lança automaticamente no Livro Caixa)</option>
+                <option value="ATRASADO">🔴 Em Atraso</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="ctr-field-notes">Observações do Contrato</label>
+              <textarea id="ctr-field-notes" class="form-control" rows="2" placeholder="Observações, escopo do contrato ou particularidades..."></textarea>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeContractModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Contrato</button>
         </div>
       </form>
     </div>

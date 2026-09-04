@@ -2451,39 +2451,64 @@ const App = {
   },
 
   openContractModal(contractId = null) {
+    if (!AuthModule.hasPermission('canCreate') && !contractId) {
+      this.showToast('Você não possui permissão para cadastrar contratos.', 'error');
+      return;
+    }
+
     this.editingContractId = contractId;
     const form = document.getElementById('contract-form');
     const titleEl = document.getElementById('contract-modal-title');
 
     if (form) form.reset();
 
+    const idEl = document.getElementById('ctr-field-id');
+    const nameEl = document.getElementById('ctr-field-client-name');
+    const contactEl = document.getElementById('ctr-field-client-contact');
+    const dueDayEl = document.getElementById('ctr-field-due-day');
+    const monthlyEl = document.getElementById('ctr-field-monthly-value');
+    const extraValEl = document.getElementById('ctr-field-extra-value');
+    const extraDescEl = document.getElementById('ctr-field-extra-desc');
+    const methodEl = document.getElementById('ctr-field-payment-method');
+    const statusEl = document.getElementById('ctr-field-status');
+    const notesEl = document.getElementById('ctr-field-notes');
+
     if (contractId) {
       const ctr = this.contracts.find(c => c.id == contractId);
       if (ctr) {
         if (titleEl) titleEl.innerText = 'Editar Contrato Mensal';
-        document.getElementById('ctr-field-id').value = ctr.id;
-        document.getElementById('ctr-field-client-name').value = ctr.clientName || '';
-        document.getElementById('ctr-field-client-contact').value = ctr.clientContact || '';
-        document.getElementById('ctr-field-due-day').value = ctr.dueDay || 10;
-        document.getElementById('ctr-field-monthly-value').value = ctr.monthlyValue || 0;
-        document.getElementById('ctr-field-extra-value').value = ctr.extraValue || 0;
-        document.getElementById('ctr-field-extra-desc').value = ctr.extraDescription || '';
-        document.getElementById('ctr-field-payment-method').value = ctr.paymentMethod || 'PIX';
-        document.getElementById('ctr-field-status').value = ctr.status || 'PENDENTE';
-        document.getElementById('ctr-field-notes').value = ctr.notes || '';
+        if (idEl) idEl.value = ctr.id;
+        if (nameEl) nameEl.value = ctr.clientName || '';
+        if (contactEl) contactEl.value = ctr.clientContact || '';
+        if (dueDayEl) dueDayEl.value = ctr.dueDay || 10;
+        if (monthlyEl) monthlyEl.value = ctr.monthlyValue || 0;
+        if (extraValEl) extraValEl.value = ctr.extraValue || 0;
+        if (extraDescEl) extraDescEl.value = ctr.extraDescription || '';
+        if (methodEl) methodEl.value = ctr.paymentMethod || 'PIX';
+        if (statusEl) statusEl.value = ctr.status || 'PENDENTE';
+        if (notesEl) notesEl.value = ctr.notes || '';
       }
     } else {
       if (titleEl) titleEl.innerText = 'Novo Contrato Mensal';
-      document.getElementById('ctr-field-id').value = '';
-      document.getElementById('ctr-field-due-day').value = '10';
-      document.getElementById('ctr-field-monthly-value').value = '';
-      document.getElementById('ctr-field-extra-value').value = '0.00';
-      document.getElementById('ctr-field-status').value = 'PENDENTE';
+      if (idEl) idEl.value = '';
+      if (nameEl) nameEl.value = '';
+      if (contactEl) contactEl.value = '';
+      if (dueDayEl) dueDayEl.value = '10';
+      if (monthlyEl) monthlyEl.value = '';
+      if (extraValEl) extraValEl.value = '0.00';
+      if (extraDescEl) extraDescEl.value = '';
+      if (statusEl) statusEl.value = 'PENDENTE';
+      if (methodEl) methodEl.value = 'PIX';
+      if (notesEl) notesEl.value = '';
     }
 
     this.calculateContractTotal();
     const modal = document.getElementById('contract-modal');
-    if (modal) modal.classList.add('active');
+    if (modal) {
+      modal.classList.add('active');
+    } else {
+      console.error('Modal contract-modal não encontrado no DOM!');
+    }
   },
 
   closeContractModal() {
