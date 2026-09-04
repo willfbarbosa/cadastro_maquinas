@@ -2676,7 +2676,7 @@ const App = {
   },
 
   async validateContractPayment(contractId) {
-    if (!AuthModule.isAdmin()) {
+    if (!AuthModule.hasPermission('isAdmin')) {
       alert('Apenas o Administrador pode validar pagamentos de contratos.');
       return;
     }
@@ -2732,7 +2732,7 @@ const App = {
   },
 
   async deleteContract(contractId) {
-    if (!AuthModule.isAdmin()) {
+    if (!AuthModule.hasPermission('isAdmin')) {
       alert('Apenas o Administrador pode excluir contratos.');
       return;
     }
@@ -2828,7 +2828,7 @@ const App = {
       return;
     }
 
-    const isAdmin = AuthModule.isAdmin();
+    const isAdmin = AuthModule.hasPermission('isAdmin');
 
     tbody.innerHTML = this.filteredContracts.map(c => {
       const monthly = parseFloat(c.monthlyValue) || 0;

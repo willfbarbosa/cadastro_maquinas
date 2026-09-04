@@ -131,6 +131,10 @@ const AuthModule = {
     return !!(currentUser.permissions && currentUser.permissions[permissionKey]);
   },
 
+  isAdmin() {
+    return this.hasPermission('isAdmin');
+  },
+
   async saveUserAsync(userData, editingUserId = null) {
     try {
       const res = await fetch('/api/auth/users', {
