@@ -2413,6 +2413,11 @@ const App = {
     }, 3500);
   },
 
+  formatCurrency(val) {
+    const num = parseFloat(val) || 0;
+    return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  },
+
   escapeHtml(str) {
     if (!str) return '';
     return String(str)
