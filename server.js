@@ -529,6 +529,22 @@ app.delete('/api/logs', async (req, res) => {
   }
 });
 
+// Rota de Limpeza Completa dos Dados do Banco (Equipamentos, Manutenções, Estoque, Caixa, OS, Logs)
+app.post('/api/clear-all-data', async (req, res) => {
+  try {
+    await dbRun('DELETE FROM equipments');
+    await dbRun('DELETE FROM maintenances');
+    await dbRun('DELETE FROM stock_items');
+    await dbRun('DELETE FROM cashbook');
+    await dbRun('DELETE FROM service_orders');
+    await dbRun('DELETE FROM logs');
+    res.json({ success: true, message: 'Todos os registros foram apagados do banco de dados com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
 
 
 function startServer(portToUse) {

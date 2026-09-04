@@ -1656,8 +1656,24 @@ const App = {
     this.showToast('Relatório CSV exportado com sucesso!', 'success');
   },
 
-  async loadSampleData() {
-    if (confirm('Deseja limpar todos os dados em memória local?')) {
+  async clearAllDatabaseData() {
+    if (!AuthModule.hasPermission('isAdmin')) {
+      alert('Apenas usuários Administradores podem zerar o banco de dados.');
+      return;
+    }
+
+    if (confirm('⚠️ ATENÇÃO: Deseja apagar TODOS os equipamentos, produtos do estoque, lançamentos do caixa e ordens de serviço do banco de dados?\n\nEsta ação é irreversível.')) {
+      try {
+        if (typeof API !== 'undefined' && API.enabled) {
+          const res = await API.post('/clear-all-data', {});
+          if (!res.success) {
+            console.warn('Erro ao zerar banco via API:', res.message);
+          }
+        }
+      } catch (err) {
+        console.error('Falha na requisição de limpeza:', err);
+      }
+
       this.equipments = [];
       this.cashbookEntries = [];
       this.stockItems = [];
@@ -1668,13 +1684,24 @@ const App = {
       this.saveStockLocal();
       this.saveServiceOrdersLocal();
 
-      this.renderAll();
-      if (this.activeTab === 'stock') this.renderStockAll();
-      if (this.activeTab === 'cashbook') this.renderCashbookAll();
+      localStorage.removeItem('ez_equipments');
+      localStorage.removeItem('ez_cashbook');
+      localStorage.removeItem('ez_stock');
+      localStorage.removeItem('ez_service_orders');
 
-      this.showToast('Dados locais limpos com sucesso!', 'info');
+      this.renderAll();
+      if (typeof this.renderStockAll === 'function') this.renderStockAll();
+      if (typeof this.renderCashbookAll === 'function') this.renderCashbookAll();
+      if (typeof this.renderOrdersTable === 'function') this.renderOrdersTable();
+
+      this.showToast('Banco de dados zerado com sucesso! Nenhum dado cadastrado no momento.', 'success');
     }
   },
+
+  async loadSampleData() {
+    await this.clearAllDatabaseData();
+  },
+
 
   openLogsModal() {
     if (!AuthModule.hasPermission('isAdmin')) {
