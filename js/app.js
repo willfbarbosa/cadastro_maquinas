@@ -2166,13 +2166,13 @@ const App = {
       this.saveServiceOrdersLocal();
     }
 
-    // AUTOMAÇÃO 1: Orçamento / OS com status 'APROVADO' -> ENTRADA no Livro Caixa
-    if (status === 'APROVADO' && totalCost > 0) {
+    // AUTOMAÇÃO 1: Ordem de Serviço com status 'CONCLUIDO' -> ENTRADA no Livro Caixa
+    if (status === 'CONCLUIDO' && totalCost > 0) {
       const cashIncomePayload = {
         date: new Date().toISOString().split('T')[0],
         type: 'ENTRADA',
-        category: 'Orçamento Aprovado',
-        description: `Orçamento Aprovado (${payload.code || 'OS'}): ${clientName} - ${equipmentDescription}`,
+        category: 'Serviços Prestados',
+        description: `Serviço Concluído (${payload.code || 'OS'}): ${clientName} - ${equipmentDescription}`,
         amount: totalCost,
         paymentMethod,
         equipmentId
@@ -2187,7 +2187,7 @@ const App = {
         this.cashbookEntries.unshift({ ...cashIncomePayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
         this.saveCashbookLocal();
       }
-      this.showToast('Orçamento Aprovado! Valor lançado como ENTRADA no Livro Caixa.', 'success');
+      this.showToast(`OS Concluída! Valor de R$ ${totalCost.toFixed(2)} lançado como ENTRADA no Livro Caixa.`, 'success');
     }
 
     // AUTOMAÇÃO 2: Valor Peças/Componentes > 0 -> SAÍDA (Despesa) no Livro Caixa
@@ -2214,34 +2214,9 @@ const App = {
       this.showToast(`Valor de peças (R$ ${partsCost.toFixed(2)}) lançado como SAÍDA no Livro Caixa!`, 'info');
     }
 
-    // Pergunta se deseja integrar ao Livro Caixa se concluída
-    if (status === 'CONCLUIDO' && totalCost > 0) {
-      if (confirm(`A Ordem de Serviço foi concluída com valor de R$ ${totalCost.toFixed(2)}. Deseja lançar este valor como ENTRADA no Livro Caixa?`)) {
-        const cashPayload = {
-          date: new Date().toISOString().split('T')[0],
-          type: 'ENTRADA',
-          category: 'Serviços Prestados',
-          description: `Serviço OS ${payload.code || ''}: ${clientName} - ${equipmentDescription}`,
-          amount: totalCost,
-          paymentMethod,
-          equipmentId
-        };
-        try {
-          await fetch('/api/cashbook', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cashPayload)
-          });
-        } catch (e) {
-          this.cashbookEntries.unshift({ ...cashPayload, id: 'cb_' + Date.now(), createdAt: new Date().toISOString() });
-          this.saveCashbookLocal();
-        }
-        this.showToast('Lançamento inserido no Livro Caixa!', 'success');
-      }
-    }
-
     await this.loadCashbook();
     if (this.activeTab === 'cashbook') this.renderCashbookAll();
+
 
     this.closeServiceOrderModal();
     this.renderOrdersAll();

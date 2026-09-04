@@ -341,18 +341,19 @@ async function syncOrderToCashbook(orderData) {
   const { code, clientName, equipmentDescription, status, partsCost, totalCost, paymentMethod, equipmentId } = orderData;
   const date = new Date().toISOString().split('T')[0];
 
-  // 1. Status === 'APROVADO' -> ENTRADA no Livro Caixa com valor total do orçamento
-  if (status === 'APROVADO' && totalCost > 0) {
+  // 1. Status === 'CONCLUIDO' -> ENTRADA no Livro Caixa com valor total do serviço (quando concluída)
+  if (status === 'CONCLUIDO' && totalCost > 0) {
     const existing = await dbGet('SELECT id FROM cashbook WHERE type = "ENTRADA" AND description LIKE ?', [`%${code}%`]);
     if (!existing) {
-      const cbId = 'cb_apv_' + Date.now();
+      const cbId = 'cb_ccl_' + Date.now();
       await dbRun(
         `INSERT INTO cashbook (id, date, type, category, description, amount, paymentMethod, equipmentId, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [cbId, date, 'ENTRADA', 'Orçamento Aprovado', `Orçamento Aprovado (${code}): ${clientName} - ${equipmentDescription || 'Serviços'}`, totalCost, paymentMethod || 'PIX', equipmentId || null, new Date().toISOString()]
+        [cbId, date, 'ENTRADA', 'Serviços Prestados', `Serviço Concluído (${code}): ${clientName} - ${equipmentDescription || 'Serviços'}`, totalCost, paymentMethod || 'PIX', equipmentId || null, new Date().toISOString()]
       );
     }
   }
+
 
   // 2. Valor de Peças / Componentes -> SAÍDA (Despesa) no Livro Caixa
   if (partsCost > 0) {
