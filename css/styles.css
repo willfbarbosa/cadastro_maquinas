@@ -1086,13 +1086,14 @@ select.form-control {
   background: rgba(239, 68, 68, 0.06);
 }
 
-/* MODAIS */
+/* MODAIS DE CADASTRO E EDIÇÃO */
 .modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(8px);
   display: flex;
@@ -1103,6 +1104,7 @@ select.form-control {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
+  overflow: hidden;
 }
 
 .modal-backdrop.active {
@@ -1117,11 +1119,23 @@ select.form-control {
   width: 100%;
   max-width: 720px;
   max-height: 90vh;
+  max-height: 90dvh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg), var(--shadow-glow);
   transform: translateY(20px);
   transition: transform 0.25s ease;
+  overflow: hidden;
+}
+
+/* IMPORTANTE: Formulários dentro do modal-card devem ser Flex Containers */
+.modal-card form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
 }
 
 .modal-backdrop.active .modal-card {
@@ -1134,6 +1148,8 @@ select.form-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
+  background: #0d0d12;
 }
 
 .modal-title {
@@ -1167,6 +1183,24 @@ select.form-control {
 .modal-body {
   padding: 1.35rem 1.5rem;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar visível no modal-body */
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+.modal-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(239, 68, 68, 0.4);
+  border-radius: 4px;
+}
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
 }
 
 .modal-footer {
@@ -1176,8 +1210,54 @@ select.form-control {
   align-items: center;
   justify-content: flex-end;
   gap: 0.6rem;
-  background: rgba(12, 12, 16, 0.7);
+  background: rgba(12, 12, 16, 0.95);
+  flex-shrink: 0;
 }
+
+/* ADAPTAÇÕES PARA TELAS PEQUENAS E CELULARES (MOBILE) */
+@media (max-width: 768px) {
+  .modal-backdrop {
+    padding: 0.5rem 0.25rem;
+    align-items: flex-end;
+  }
+
+  .modal-card {
+    max-height: 94vh;
+    max-height: 94dvh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .modal-header {
+    padding: 0.85rem 1rem;
+  }
+
+  .modal-title {
+    font-size: 1.05rem;
+  }
+
+  .modal-body {
+    padding: 1rem 0.85rem;
+  }
+
+  .modal-footer {
+    padding: 0.85rem 1rem;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+
+  .modal-footer .btn {
+    flex: 1;
+    min-height: 44px;
+    justify-content: center;
+    font-size: 0.875rem;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem;
+  }
+}
+
 
 .form-grid {
   display: grid;
