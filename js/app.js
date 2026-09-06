@@ -2270,9 +2270,8 @@ const App = {
     paper.innerHTML = `
       <div class="print-header">
         <div class="print-logo-box">
-          <h2>ELETRO ZONE</h2>
-          <p>Segurança Eletrônica, Automação & Manutenção Técnica</p>
-          <p style="font-size: 0.75rem; color: #6b7280;">Contato: (11) 9999-0000 | suporte@eletrozone.com.br</p>
+          <img src="img/logo-print.png" alt="Eletro Zone" class="print-logo-img">
+          <p style="font-size: 0.8rem; color: #4b5563; font-weight: 500; margin-top: 0.35rem;">Telefone de Contato: (19) 98138-9982 &nbsp;|&nbsp; willian@eletrozone.net.br</p>
         </div>
         <div class="print-doc-info">
           <div class="doc-code">${this.escapeHtml(ord.code)}</div>
@@ -2362,6 +2361,219 @@ const App = {
 
   closePrintOrderModal() {
     document.getElementById('print-order-modal').classList.remove('active');
+  },
+
+  printOrderDocument() {
+    const paper = document.getElementById('print-paper-content');
+    if (!paper) {
+      window.print();
+      return;
+    }
+
+    // Criamos um iframe oculto e isolado para garantir impressão perfeita sem interferência do layout principal
+    const existingIframe = document.getElementById('isolated-print-iframe');
+    if (existingIframe) {
+      existingIframe.remove();
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'isolated-print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Documento Eletro Zone</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 12mm 15mm;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #111827;
+            padding: 0;
+            margin: 0;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-paper {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            background: #ffffff;
+          }
+          .print-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 1.25rem;
+            margin-bottom: 1.5rem;
+          }
+          .print-logo-img {
+            max-height: 60px;
+            max-width: 220px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 6px;
+            display: block;
+            margin-bottom: 0.35rem;
+          }
+          .print-doc-info {
+            text-align: right;
+          }
+          .print-doc-info .doc-code {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #111827;
+          }
+          .print-doc-info .doc-type {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            background: #fee2e2;
+            color: #991b1b;
+            margin-top: 0.2rem;
+          }
+          .print-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+          }
+          .print-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 1rem;
+          }
+          .print-box h4 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.25rem;
+          }
+          .print-box p {
+            font-size: 0.9rem;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+          }
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+          }
+          .print-table th {
+            background: #f3f4f6;
+            color: #374151;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            padding: 0.6rem 0.8rem;
+            text-align: left;
+            border-bottom: 2px solid #e5e7eb;
+          }
+          .print-table td {
+            padding: 0.75rem 0.8rem;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.9rem;
+            color: #1f2937;
+          }
+          .print-total-bar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 2rem;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+          }
+          .print-total-item {
+            text-align: right;
+          }
+          .print-total-item span {
+            display: block;
+            font-size: 0.75rem;
+            color: #64748b;
+            text-transform: uppercase;
+          }
+          .print-total-item strong {
+            font-size: 1.2rem;
+            color: #0f172a;
+          }
+          .print-total-item.highlight strong {
+            color: #dc2626;
+            font-size: 1.4rem;
+          }
+          .print-signatures {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            margin-top: 3rem;
+            padding-top: 1rem;
+          }
+          .signature-line {
+            border-top: 1px solid #9ca3af;
+            text-align: center;
+            padding-top: 0.4rem;
+            font-size: 0.85rem;
+            color: #4b5563;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-paper">
+          ${paper.innerHTML}
+        </div>
+      </body>
+      </html>
+    `);
+    doc.close();
+
+    // Aguarda carregamento de imagens e renderização da página
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        // Fallback para window.print padrão
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe && iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 2000);
+      }
+    }, 350);
   },
 
   exportOrdersCSV() {
